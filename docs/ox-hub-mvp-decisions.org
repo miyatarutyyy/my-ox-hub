@@ -1,0 +1,248 @@
+#+TITLE: ox-hub MVP Implementation Decisions
+#+AUTHOR: ox-hub maintainers
+#+LANGUAGE: ja
+
+* Summary
+
+MVP 実装前の決定事項をここに固定する。
+
+- 実装は repository root の =ox-hub.el= 単一ファイルから始める。
+- テストは =test/ox-hub-test.el= に Emacs 標準の ERT で書く。
+- 最小 =README.md= を追加し、コマンド一覧、metadata、test command だけを記載する。
+- Emacs package metadata、Makefile、Zenn/Qiita CLI 実行、Git push、publish、自動同期は v1 では扱わない。
+- 生成物は =dist/zenn/articles/= と =dist/qiita/public/= に出力し、Git 管理する。
+
+* Public Commands
+
+v1 では以下の interactive command を実装する。
+
+- =ox-hub-new-article=
+  - Git root 配下の =org/<slug>.org= を作成する。
+  - =<slug>= は =a-z0-9_-= の 12 文字以上 50 文字以下に制限する。
+  - 既存ファイルがある場合は error にする。
+  - 必須 =OXHUB_*= metadata の雛形を挿入する。
+
+- =ox-hub-export-current-buffer=
+  - 現在の Org buffer から Zenn/Qiita 両方の Markdown を生成する。
+  - 出力先は =dist/zenn/articles/<slug>.md= と =dist/qiita/public/<slug>.md= とする。
+  - =<slug>= は現在の Org ファイル basename から取得する。
+  - 生成済み Markdown は常に上書きする。
+
+- =ox-hub-export-current-buffer-to-zenn=
+  - 現在の Org buffer から Zenn 用 Markdown だけを生成する。
+
+- =ox-hub-export-current-buffer-to-qiita=
+  - 現在の Org buffer から Qiita 用 Markdown だけを生成する。
+
+* Metadata
+
+投稿状態は投稿先別の boolean ではなく、共通 metadata の =OXHUB_STATUS= に統合する。
+
+v1 の必須項目:
+
+#+begin_src org
+#+OXHUB_TITLE:
+#+OXHUB_TAGS:
+#+OXHUB_STATUS:
+#+OXHUB_ZENN_EMOJI:
+#+OXHUB_ZENN_TYPE:
+#+OXHUB_QIITA_PRIVATE:
+#+OXHUB_QIITA_SLIDE:
+#+end_src
+
+各 metadata の扱い:
+
+- =OXHUB_TITLE= は Zenn/Qiita の =title= に使う。
+- =OXHUB_TAGS= は comma-separated で読み取り、Zenn の =topics= と Qiita の =tags= に変換する。
+- =OXHUB_STATUS= は =draft= または =published= の enum とする。
+- =OXHUB_ZENN_EMOJI= は Zenn の =emoji= に使う。
+- =OXHUB_ZENN_TYPE= は Zenn の =type= に使う。値は =tech= または =idea= とする。
+- =OXHUB_QIITA_PRIVATE= は Qiita の =private= に使う。
+- =OXHUB_QIITA_SLIDE= は Qiita の =slide= に使う。
+
+=OXHUB_STATUS= の出力 mapping:
+
+| OXHUB_STATUS | Zenn published | Qiita ignorePublish |
+|--------------+----------------+---------------------|
+| draft        | false          | true                |
+| published    | true           | false               |
+
+旧計画の =OXHUB_ZENN_PUBLISHED= と =OXHUB_QIITA_IGNORE_PUBLISH= は使わない。
+Qiita の front matter key は =ignorePublished= ではなく =ignorePublish= に固定する。
+
+boolean 値は =true=, =false=, =t=, =nil= を受け付け、内部では Lisp boolean に正規化する。
+不正値は error にする。
+
+* New Article Defaults
+
+=ox-hub-new-article= が挿入する雛形の初期値:
+
+#+begin_src org
+#+OXHUB_TITLE:
+#+OXHUB_TAGS:
+#+OXHUB_STATUS: draft
+#+OXHUB_ZENN_EMOJI: 📝
+#+OXHUB_ZENN_TYPE: tech
+#+OXHUB_QIITA_PRIVATE: false
+#+OXHUB_QIITA_SLIDE: false
+#+end_src
+
+=OXHUB_TITLE= と =OXHUB_TAGS= は空欄のまま作成し、export 時に validation error にする。
+
+* Front Matter Rendering
+
+YAML は外部依存なしで renderer が固定順に出力する。
+
+文字列は最低限以下を escape する。
+
+- double quote
+- backslash
+- 改行
+
+tags は comma split 後に trim し、空タグを除外する。
+1 件以上の tag がない場合は error にする。
+投稿先固有の tag/topic 上限検証は v1 では行わない。
+
+Zenn 用 front matter:
+
+#+begin_src yaml
+---
+title: "Example Title"
+emoji: "📝"
+type: "tech"
+topics: ["emacs", "org-mode"]
+published: false
+---
+#+end_src
+
+Qiita 用 front matter:
+
+#+begin_src yaml
+---
+title: "Example Title"
+tags:
+  - emacs
+  - org-mode
+private: false
+slide: false
+ignorePublish: true
+---
+#+end_src
+
+* Body Rendering
+
+本文は =org-element-parse-buffer= で AST を取得し、自前 renderer で Markdown へ変換する。
+
+見出しは Org と Markdown で同じレベルにする。
+
+- =*= は =#=
+- =**= は =##=
+- =***= は =###=
+
+v1 で対応する Org 要素:
+
+- heading
+- paragraph
+- bold
+- italic
+- code
+- src block / code block
+- unordered list
+- ordered list
+- link
+- quote
+- table
+
+対応リスト外の本文要素は原則 error にする。
+=org-data=, =section=, metadata keyword など、renderer 内部で必要な構造要素は例外として処理する。
+
+画像や添付ファイルはコピーしない。
+=[[file:...]]= は拡張子で画像判定する。
+
+- 画像拡張子の場合は =![](...)= に変換する。
+- それ以外は =[](...)= に変換する。
+
+* Structured Directives
+
+Zenn/Qiita で差異のある本文記法は、Org の special block として =#+begin_oxhub ... #+end_oxhub= を使って表現する。
+
+v1 で扱う directive:
+
+- =message=
+  - 補足・警告などのメッセージブロックを表す。
+  - =:type= は =info= または =alert= とする。
+
+- =details=
+  - 折りたたみブロックを表す。
+  - =:summary= を必須にする。
+
+- =codefile=
+  - ファイル名付き code block を表す。
+  - =:lang= と =:filename= を必須にする。
+
+target 別の出力方針:
+
+| directive | Zenn output                              | Qiita output                                      |
+|-----------+------------------------------------------+---------------------------------------------------|
+| message   | =:::message= / =:::message alert=        | blockquote。alert は =**Warning:**= を付ける      |
+| details   | =:::details summary=                     | =<details><summary>summary</summary>= HTML        |
+| codefile  | fenced code block with =lang:filename=   | fenced code block with =lang:filename=            |
+
+Qiita の =details= は HTML block 内の Markdown を解釈させるため、公式ヘルプに従い summary 行の後と閉じタグ前後に空行を入れる。
+
+* Error Policy
+
+次の状況は error にする。
+
+- 現在の buffer が file visiting buffer ではない。
+- Git root が見つからない。
+- Org ファイル名由来の slug が不正である。
+- 必須 metadata が欠落している。
+- =OXHUB_STATUS= が =draft= / =published= 以外である。
+- boolean や Zenn type の値が不正である。
+- tag が 1 件もない。
+- 未対応 Org AST 要素に遭遇した。
+- 未対応 =oxhub= directive に遭遇した。
+- directive の必須引数が欠落している。
+
+* Test Plan
+
+テストは Emacs 標準の ERT で書く。
+
+対象:
+
+- =OXHUB_*= metadata の抽出。
+- =OXHUB_STATUS= の validation と Zenn/Qiita への mapping。
+- boolean 正規化。
+- 必須項目 validation。
+- slug validation。
+- YAML escape。
+- tag validation。
+- Zenn front matter の固定順出力。
+- Qiita front matter の固定順出力。
+- heading, paragraph, inline style, code block, list, link, quote, table の Markdown 出力。
+- =message=, =details=, =codefile= directive の target 別出力。
+- =[[file:...]]= が asset copy なしで Markdown link/image になること。
+- Git root 不在、未保存 buffer、未対応 AST 要素、metadata 欠落が error になること。
+
+想定 test command:
+
+#+begin_src shell
+emacs --batch -l ert -l ox-hub.el -l test/ox-hub-test.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+* Assumptions
+
+- Git root は =/home/trt-ryzen7/Dev/ox-hub= とする。
+- =docs/ox-hub-mvp-plan.org= は既存の計画書として残す。
+- Zenn/Qiita CLI 本体は v1 テスト対象外とする。
+- =dist/zenn= と =dist/qiita= を各連携・CLI の root として扱う運用は repository 設定側で吸収する。
+- =dist/= 配下の Markdown は再生成可能だが、GitHub 連携用の入力として Git 管理する。
+
+* References
+
+- Zenn CLI guide: https://zenn.dev/zenn/articles/zenn-cli-guide
+- Zenn Markdown guide: https://zenn.dev/zenn/articles/markdown-guide
+- Qiita CLI README: https://github.com/increments/qiita-cli
+- Qiita Markdown help: https://help.qiita.com/ja/articles/qiita-markdown
+- Qiita Markdown processor: https://github.com/increments/qiita-markdown
