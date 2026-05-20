@@ -1,0 +1,137 @@
+#+TITLE: ox-hub Work Report
+#+AUTHOR: ox-hub maintainers
+#+LANGUAGE: ja
+
+* Summary
+
+ここまでの作業では、MVP 実装方針を =docs/= の既存資料から確認し、
+実装をチケット単位で進める運用にした。
+
+実装済み範囲は以下の 2 点。
+
+- 最小 =README.org= の追加。
+- metadata / slug validation の基礎実装と ERT 追加。
+
+* Repository State
+
+確認時点の作業ツリーは clean。
+
+直近コミット:
+
+#+begin_src text
+5c69984 feat: add metadata and slug validation
+19654c9 docs: add minimap project README
+e4c867a Initial commit
+#+end_src
+
+* Ticket 1: Minimal README
+
+追加ファイル:
+
+- =README.org=
+
+実施内容:
+
+- =ox-hub= の MVP 目的を記載。
+- 公開予定 command を記載。
+- 必須 =OXHUB_*= metadata を記載。
+- =OXHUB_STATUS= から Zenn =published= / Qiita =ignorePublish= への mapping を記載。
+- ERT 実行コマンドを記載。
+
+備考:
+
+- 当初は =README.md= として追加したが、ユーザー希望により =README.org= に変更した。
+- ドキュメントのみのため、このチケットでは ERT は未実行。
+
+* Ticket 2: Metadata and Slug Validation
+
+追加ファイル:
+
+- =ox-hub.el=
+- =test/ox-hub-test.el=
+
+実装内容:
+
+- =ox-hub--valid-slug-p=
+  - =a-z0-9_-= のみ許可。
+  - 12 文字以上 50 文字以下を valid とする。
+  - Emacs の =case-fold-search= 影響を避けるため、slug validation 内では case-sensitive に固定。
+
+- =ox-hub--git-root=
+  - file visiting buffer または指定 file を起点に =.git= を探索。
+  - 未保存 buffer または Git root 不在の場合は =user-error=。
+
+- =ox-hub--parse-buffer=
+  - =org-element-parse-buffer= により現在の Org buffer から AST を抽出。
+
+- =ox-hub--extract-metadata=
+  - Org AST の =keyword= 要素から =OXHUB_*= metadata を抽出。
+  - keyword 名は大文字化して扱う。
+  - 内部表現は plist。
+  - duplicate metadata は現時点では後勝ち。
+
+- =ox-hub--parse-boolean=
+  - =true= / =t= を Lisp boolean の =t= に正規化。
+  - =false= / =nil= を Lisp boolean の =nil= に正規化。
+  - 大文字小文字は無視。
+  - 不正値は error。
+
+- =ox-hub--validate-metadata=
+  - 必須 metadata の存在と空値を検証。
+  - =OXHUB_STATUS= は =draft= / =published= のみ許可。
+  - =OXHUB_ZENN_TYPE= は =tech= / =idea= のみ許可。
+  - Qiita boolean fields を Lisp boolean に正規化。
+
+* Test Result
+
+Ticket 2 完了時に以下を実行。
+
+#+begin_src sh
+emacs --batch -l ert -l ox-hub.el -l test/ox-hub-test.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+結果:
+
+#+begin_src text
+Ran 13 tests, 13 results as expected, 0 unexpected
+#+end_src
+
+主な test coverage:
+
+- slug validation の valid / invalid case。
+- boolean parsing の valid / invalid case。
+- =OXHUB_*= metadata 抽出。
+- lowercase keyword の正規化。
+- duplicate metadata の後勝ち挙動。
+- 必須 metadata 欠落と空値の error。
+- 不正 =OXHUB_STATUS= / =OXHUB_ZENN_TYPE= / Qiita boolean の error。
+
+* Current Design Notes
+
+現在の設計認識:
+
+- public command は最終的に正本 Org buffer に対する export entrypoint になる。
+- 内部では =org-element-parse-buffer= で AST を抽出する。
+- front matter は metadata 全体に対して 1 回 renderer を適用する。
+- 本文は AST node ごとに dispatcher が処理を振り分ける。
+- 通常 Org 要素は共通 Markdown converter に渡す。
+- =oxhub= special block のみ target-specific converter に渡す。
+
+* Next Ticket
+
+次の作業予定は Ticket 3。
+
+実装対象:
+
+- Zenn front matter renderer。
+- Qiita front matter renderer。
+- YAML string escape。
+- tag split / trim / empty tag removal。
+- tag が 1 件もない場合の validation error。
+- =OXHUB_STATUS= から Zenn =published= / Qiita =ignorePublish= への mapping。
+
+想定コミットメッセージ:
+
+#+begin_src text
+feat: render front matter
+#+end_src

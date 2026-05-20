@@ -48,6 +48,17 @@
 (ert-deftest ox-hub-parse-boolean-rejects-invalid-values ()
   (should-error (ox-hub--parse-boolean "yes")))
 
+(ert-deftest ox-hub-parse-tags-normalizes-comma-separated-tags ()
+  (should (equal (ox-hub--parse-tags " emacs, org-mode ,, lisp ")
+                 '("emacs" "org-mode" "lisp"))))
+
+(ert-deftest ox-hub-parse-tags-rejects-empty-tags ()
+  (should-error (ox-hub--parse-tags " , , ")))
+
+(ert-deftest ox-hub-yaml-escape-string-escapes-special-characters ()
+  (should (equal (ox-hub--yaml-escape-string "a\\b\"c\nd")
+                 "a\\\\b\\\"c\\nd")))
+
 (ert-deftest ox-hub-extract-metadata-reads-oxhub-keywords ()
   (let* ((ast (ox-hub-test--parse-string
                "#+OXHUB_TITLE: Example\n#+OXHUB_STATUS: draft\n#+AUTHOR: Someone\n"))
@@ -77,7 +88,7 @@
                      :qiita-private "FALSE"
                      :qiita-slide "t"))))
     (should (equal (plist-get metadata :title) "Example Title"))
-    (should (equal (plist-get metadata :tags) "emacs, org-mode"))
+    (should (equal (plist-get metadata :tags) '("emacs" "org-mode")))
     (should (equal (plist-get metadata :status) "draft"))
     (should (equal (plist-get metadata :zenn-emoji) "memo"))
     (should (equal (plist-get metadata :zenn-type) "tech"))
@@ -108,6 +119,59 @@
   (let ((metadata (copy-sequence (ox-hub-test--valid-metadata))))
     (setq metadata (plist-put metadata :qiita-private "no"))
     (should-error (ox-hub--validate-metadata metadata))))
+
+(ert-deftest ox-hub-validate-metadata-rejects-empty-tags ()
+  (let ((metadata (copy-sequence (ox-hub-test--valid-metadata))))
+    (setq metadata (plist-put metadata :tags " , , "))
+    (should-error (ox-hub--validate-metadata metadata))))
+
+(ert-deftest ox-hub-render-zenn-front-matter-renders-draft ()
+  (let ((metadata (ox-hub--validate-metadata
+                   '(:title "Example \"Title\""
+                     :tags "emacs, org-mode"
+                     :status "draft"
+                     :zenn-emoji "memo"
+                     :zenn-type "tech"
+                     :qiita-private "false"
+                     :qiita-slide "false"))))
+    (should (equal (ox-hub--render-zenn-front-matter metadata)
+                   "---\ntitle: \"Example \\\"Title\\\"\"\nemoji: \"memo\"\ntype: \"tech\"\ntopics: [\"emacs\", \"org-mode\"]\npublished: false\n---\n"))))
+
+(ert-deftest ox-hub-render-zenn-front-matter-renders-published ()
+  (let ((metadata (ox-hub--validate-metadata
+                   '(:title "Example Title"
+                     :tags "emacs"
+                     :status "published"
+                     :zenn-emoji "memo"
+                     :zenn-type "idea"
+                     :qiita-private "false"
+                     :qiita-slide "false"))))
+    (should (string-match-p "^published: true$"
+                            (ox-hub--render-zenn-front-matter metadata)))))
+
+(ert-deftest ox-hub-render-qiita-front-matter-renders-draft ()
+  (let ((metadata (ox-hub--validate-metadata
+                   '(:title "Example Title"
+                     :tags "emacs, org-mode"
+                     :status "draft"
+                     :zenn-emoji "memo"
+                     :zenn-type "tech"
+                     :qiita-private "true"
+                     :qiita-slide "false"))))
+    (should (equal (ox-hub--render-qiita-front-matter metadata)
+                   "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\n  - \"org-mode\"\nprivate: true\nslide: false\nignorePublish: true\n---\n"))))
+
+(ert-deftest ox-hub-render-qiita-front-matter-renders-published ()
+  (let ((metadata (ox-hub--validate-metadata
+                   '(:title "Example Title"
+                     :tags "emacs"
+                     :status "published"
+                     :zenn-emoji "memo"
+                     :zenn-type "tech"
+                     :qiita-private "false"
+                     :qiita-slide "true"))))
+    (should (equal (ox-hub--render-qiita-front-matter metadata)
+                   "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\nprivate: false\nslide: true\nignorePublish: false\n---\n"))))
 
 (provide 'ox-hub-test)
 

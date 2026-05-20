@@ -13,6 +13,7 @@
 
 (require 'org)
 (require 'org-element)
+(require 'seq)
 (require 'subr-x)
 
 (defconst ox-hub--metadata-key-map
@@ -99,12 +100,45 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
       (error "Invalid %s: %s" label value))
     normalized))
 
+(defun ox-hub--parse-tags (value)
+  "Parse comma-separated tag VALUE into a non-empty list of strings."
+  (let ((tags (seq-filter (lambda (tag)
+                            (not (string-empty-p tag)))
+                          (mapcar #'string-trim
+                                  (split-string (or value "") ",")))))
+    (unless tags
+      (error "At least one OXHUB_TAGS value is required"))
+    tags))
+
+(defun ox-hub--yaml-escape-string (value)
+  "Escape VALUE for use in a YAML double-quoted string."
+  (mapconcat (lambda (char)
+               (pcase char
+                 (?\\ "\\\\")
+                 (?\" "\\\"")
+                 (?\n "\\n")
+                 (_ (char-to-string char))))
+             value
+             ""))
+
+(defun ox-hub--yaml-boolean (value)
+  "Return VALUE as a YAML boolean string."
+  (if value "true" "false"))
+
+(defun ox-hub--yaml-quoted (value)
+  "Return VALUE as a YAML double-quoted string."
+  (format "\"%s\"" (ox-hub--yaml-escape-string value)))
+
+(defun ox-hub--published-p (metadata)
+  "Return non-nil when METADATA should be published."
+  (equal (plist-get metadata :status) "published"))
+
 (defun ox-hub--validate-metadata (metadata)
   "Validate and normalize ox-hub METADATA."
   (dolist (key ox-hub--required-metadata)
     (ox-hub--require-metadata metadata key))
   (let ((title (ox-hub--require-metadata metadata :title))
-        (tags (ox-hub--require-metadata metadata :tags))
+        (tags (ox-hub--parse-tags (ox-hub--require-metadata metadata :tags)))
         (status (ox-hub--validate-enum
                  (ox-hub--require-metadata metadata :status)
                  '("draft" "published")
@@ -125,6 +159,31 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
           :zenn-type zenn-type
           :qiita-private qiita-private
           :qiita-slide qiita-slide)))
+
+(defun ox-hub--render-zenn-front-matter (metadata)
+  "Render Zenn front matter from normalized METADATA."
+  (let ((topics (mapconcat #'ox-hub--yaml-quoted
+                           (plist-get metadata :tags)
+                           ", ")))
+    (format "---\ntitle: %s\nemoji: %s\ntype: %s\ntopics: [%s]\npublished: %s\n---\n"
+            (ox-hub--yaml-quoted (plist-get metadata :title))
+            (ox-hub--yaml-quoted (plist-get metadata :zenn-emoji))
+            (ox-hub--yaml-quoted (plist-get metadata :zenn-type))
+            topics
+            (ox-hub--yaml-boolean (ox-hub--published-p metadata)))))
+
+(defun ox-hub--render-qiita-front-matter (metadata)
+  "Render Qiita front matter from normalized METADATA."
+  (let ((tags (mapconcat (lambda (tag)
+                           (format "  - %s" (ox-hub--yaml-quoted tag)))
+                         (plist-get metadata :tags)
+                         "\n")))
+    (format "---\ntitle: %s\ntags:\n%s\nprivate: %s\nslide: %s\nignorePublish: %s\n---\n"
+            (ox-hub--yaml-quoted (plist-get metadata :title))
+            tags
+            (ox-hub--yaml-boolean (plist-get metadata :qiita-private))
+            (ox-hub--yaml-boolean (plist-get metadata :qiita-slide))
+            (ox-hub--yaml-boolean (not (ox-hub--published-p metadata))))))
 
 (provide 'ox-hub)
 
