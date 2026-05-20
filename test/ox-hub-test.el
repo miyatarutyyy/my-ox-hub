@@ -240,6 +240,53 @@
     (should (equal (ox-hub--render-qiita-front-matter metadata)
                    "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\nprivate: false\nslide: true\nignorePublish: false\n---\n"))))
 
+(ert-deftest ox-hub-render-body-skips-keywords ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+OXHUB_TITLE: Example\n#+TITLE: Ignored\n\nBody text\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "Body text\n"))))
+
+(ert-deftest ox-hub-render-body-renders-headings-and-paragraphs ()
+  (let ((ast (ox-hub-test--parse-string
+              "* Heading\nParagraph text\n\n** Child\nMore text\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "# Heading\n\nParagraph text\n\n## Child\n\nMore text\n"))))
+
+(ert-deftest ox-hub-render-body-renders-inline-markup-and-links ()
+  (let ((ast (ox-hub-test--parse-string
+              "Text *bold* /italic/ =code= ~verbatim~ [[https://example.com][Example]] [[file:notes.org][Notes]] [[file:image.png]]\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "Text **bold** *italic* `code` `verbatim` [Example](https://example.com) [Notes](notes.org) ![](image.png)\n"))))
+
+(ert-deftest ox-hub-render-body-renders-code-blocks ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_src emacs-lisp\n(message \"hi\")\n#+end_src\n\n#+begin_example\nplain text\n#+end_example\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "```emacs-lisp\n(message \"hi\")\n```\n\n```\nplain text\n```\n"))))
+
+(ert-deftest ox-hub-render-body-renders-lists ()
+  (let ((ast (ox-hub-test--parse-string
+              "- one\n- two\n\n1. first\n2. second\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "- one\n- two\n\n1. first\n2. second\n"))))
+
+(ert-deftest ox-hub-render-body-renders-quote-block ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_quote\nquoted *text*\nsecond line\n#+end_quote\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "> quoted **text**\n> second line\n"))))
+
+(ert-deftest ox-hub-render-body-renders-table ()
+  (let ((ast (ox-hub-test--parse-string
+              "| Name | Value |\n|------+-------|\n| one  |     1 |\n| two  |     2 |\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "| Name | Value |\n| --- | --- |\n| one | 1 |\n| two | 2 |\n"))))
+
+(ert-deftest ox-hub-render-body-rejects-unsupported-elements ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_note\nUnsupported\n#+end_note\n")))
+    (should-error (ox-hub--render-body ast))))
+
 (provide 'ox-hub-test)
 
 ;;; ox-hub-test.el ends here

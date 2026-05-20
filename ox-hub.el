@@ -30,6 +30,10 @@
   '(:title :tags :status :zenn-emoji :zenn-type :qiita-private :qiita-slide)
   "Metadata keys required for export.")
 
+(defconst ox-hub--image-file-extensions
+  '("avif" "gif" "jpeg" "jpg" "png" "svg" "webp")
+  "File extensions treated as images in Markdown links.")
+
 (defun ox-hub--new-article-template ()
   "Return the default Org metadata template for a new article."
   (concat "#+OXHUB_TITLE:\n"
@@ -195,6 +199,186 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
             (ox-hub--yaml-boolean (plist-get metadata :qiita-private))
             (ox-hub--yaml-boolean (plist-get metadata :qiita-slide))
             (ox-hub--yaml-boolean (not (ox-hub--published-p metadata))))))
+
+(defun ox-hub--render-body (ast &optional target)
+  "Render Org AST body as Markdown for TARGET."
+  (let ((body (string-trim-right (ox-hub--render-node ast target))))
+    (if (string-empty-p body)
+        ""
+      (concat body "\n"))))
+
+(defun ox-hub--render-node (node target)
+  "Render Org NODE as Markdown for TARGET."
+  (cond
+   ((stringp node) node)
+   ((not node) "")
+   (t
+    (pcase (org-element-type node)
+      ('org-data (ox-hub--render-contents node target))
+      ('section (ox-hub--render-contents node target))
+      ('keyword "")
+      ('headline (ox-hub--render-headline node target))
+      ('paragraph (concat (string-trim-right
+                           (ox-hub--render-contents node target))
+                          "\n\n"))
+      ('bold (concat (format "**%s**" (ox-hub--render-contents node target))
+                     (ox-hub--render-post-blank node)))
+      ('italic (concat (format "*%s*" (ox-hub--render-contents node target))
+                       (ox-hub--render-post-blank node)))
+      ((or 'code 'verbatim)
+       (concat (format "`%s`" (org-element-property :value node))
+               (ox-hub--render-post-blank node)))
+      ('link (ox-hub--render-link node target))
+      ('src-block (ox-hub--render-src-block node))
+      ('example-block (ox-hub--render-example-block node))
+      ('plain-list (ox-hub--render-plain-list node target))
+      ('quote-block (ox-hub--render-quote-block node target))
+      ('table (ox-hub--render-table node target))
+      (_ (error "Unsupported Org element: %s" (org-element-type node)))))))
+
+(defun ox-hub--render-post-blank (node)
+  "Render NODE post-blank spaces."
+  (make-string (or (org-element-property :post-blank node) 0) ? ))
+
+(defun ox-hub--render-contents (node target)
+  "Render NODE contents as Markdown for TARGET."
+  (mapconcat (lambda (child)
+               (ox-hub--render-node child target))
+             (org-element-contents node)
+             ""))
+
+(defun ox-hub--render-headline (node target)
+  "Render headline NODE as Markdown for TARGET."
+  (let ((level (org-element-property :level node))
+        (title (mapconcat (lambda (child)
+                            (ox-hub--render-node child target))
+                          (org-element-property :title node)
+                          ""))
+        (contents (ox-hub--render-contents node target)))
+    (concat (make-string level ?#)
+            " "
+            title
+            "\n\n"
+            contents)))
+
+(defun ox-hub--render-src-block (node)
+  "Render src-block NODE as a fenced Markdown code block."
+  (let ((language (or (org-element-property :language node) ""))
+        (value (string-trim-right (or (org-element-property :value node) ""))))
+    (format "```%s\n%s\n```\n\n" language value)))
+
+(defun ox-hub--render-example-block (node)
+  "Render example-block NODE as a fenced Markdown code block."
+  (let ((value (string-trim-right (or (org-element-property :value node) ""))))
+    (format "```\n%s\n```\n\n" value)))
+
+(defun ox-hub--render-plain-list (node target)
+  "Render plain-list NODE as a Markdown list for TARGET."
+  (let ((index 0)
+        previous-ordered
+        seen-item
+        rendered)
+    (dolist (item (org-element-contents node))
+      (setq index (1+ index))
+      (let* ((marker (ox-hub--list-item-marker item index))
+             (ordered (ox-hub--ordered-list-marker-p marker))
+             (item-text (ox-hub--render-list-item item target marker)))
+        (setq rendered
+              (concat rendered
+                      (cond
+                       ((not seen-item) "")
+                       ((eq previous-ordered ordered) "\n")
+                       (t "\n\n"))
+                      item-text))
+        (setq seen-item t)
+        (setq previous-ordered ordered)))
+    (concat rendered "\n\n")))
+
+(defun ox-hub--ordered-list-marker-p (marker)
+  "Return non-nil when MARKER is an ordered Markdown list marker."
+  (string-match-p "\\`[0-9]+\\. " marker))
+
+(defun ox-hub--list-item-marker (node index)
+  "Return Markdown list marker for item NODE at INDEX."
+  (let ((bullet (or (org-element-property :bullet node) "")))
+    (if (string-match "\\`\\([0-9]+\\)[.)][ \t]*\\'" bullet)
+        (format "%s. " (match-string 1 bullet))
+      "- ")))
+
+(defun ox-hub--render-list-item (node target marker)
+  "Render list item NODE with Markdown MARKER for TARGET."
+  (let* ((content (string-trim-right (ox-hub--render-contents node target)))
+         (lines (split-string content "\n")))
+    (mapconcat (lambda (line)
+                 (if (eq line (car lines))
+                     (concat marker line)
+                   (concat (make-string (length marker) ? ) line)))
+               lines
+               "\n")))
+
+(defun ox-hub--render-link (node target)
+  "Render link NODE as Markdown for TARGET."
+  (let* ((type (org-element-property :type node))
+         (path (org-element-property :path node))
+         (raw-link (or (org-element-property :raw-link node) path))
+         (url (if (equal type "file") path raw-link))
+         (description (if (org-element-contents node)
+                          (ox-hub--render-contents node target)
+                        nil)))
+    (if (and (equal type "file") (ox-hub--image-path-p path))
+        (concat (format "![%s](%s)" (or description "") url)
+                (ox-hub--render-post-blank node))
+      (concat (format "[%s](%s)" (or description url) url)
+              (ox-hub--render-post-blank node)))))
+
+(defun ox-hub--image-path-p (path)
+  "Return non-nil when PATH has a known image file extension."
+  (let ((extension (and path (file-name-extension path))))
+    (and extension
+         (member (downcase extension) ox-hub--image-file-extensions))))
+
+(defun ox-hub--render-quote-block (node target)
+  "Render quote-block NODE as Markdown for TARGET."
+  (let ((content (string-trim-right (ox-hub--render-contents node target))))
+    (concat (mapconcat (lambda (line)
+                         (concat "> " line))
+                       (split-string content "\n")
+                       "\n")
+            "\n\n")))
+
+(defun ox-hub--render-table (node target)
+  "Render table NODE as a Markdown table for TARGET."
+  (let ((rows (seq-filter (lambda (row)
+                            (eq (org-element-property :type row) 'standard))
+                          (org-element-contents node))))
+    (unless rows
+      (error "Table must contain at least one standard row"))
+    (let* ((rendered-rows (mapcar (lambda (row)
+                                    (ox-hub--render-table-row row target))
+                                  rows))
+           (header (car rendered-rows))
+           (separator (mapcar (lambda (_cell) "---") header))
+           (body (cdr rendered-rows)))
+      (concat (ox-hub--format-markdown-table-row header)
+              "\n"
+              (ox-hub--format-markdown-table-row separator)
+              (if body
+                  (concat "\n"
+                          (mapconcat #'ox-hub--format-markdown-table-row
+                                     body
+                                     "\n"))
+                "")
+              "\n\n"))))
+
+(defun ox-hub--render-table-row (node target)
+  "Render table-row NODE as a list of Markdown cell strings for TARGET."
+  (mapcar (lambda (cell)
+            (string-trim (ox-hub--render-contents cell target)))
+          (org-element-contents node)))
+
+(defun ox-hub--format-markdown-table-row (cells)
+  "Format CELLS as one Markdown table row."
+  (concat "| " (mapconcat #'identity cells " | ") " |"))
 
 ;;;###autoload
 (defun ox-hub-new-article (slug)
