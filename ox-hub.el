@@ -225,15 +225,22 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
                      (ox-hub--render-post-blank node)))
       ('italic (concat (format "*%s*" (ox-hub--render-contents node target))
                        (ox-hub--render-post-blank node)))
+      ('strike-through
+       (concat (format "~~%s~~" (ox-hub--render-contents node target))
+               (ox-hub--render-post-blank node)))
       ((or 'code 'verbatim)
        (concat (format "`%s`" (org-element-property :value node))
                (ox-hub--render-post-blank node)))
+      ('footnote-reference (ox-hub--render-footnote-reference node))
+      ('footnote-definition (ox-hub--render-footnote-definition node target))
       ('link (ox-hub--render-link node target))
       ('src-block (ox-hub--render-src-block node))
       ('example-block (ox-hub--render-example-block node))
       ('plain-list (ox-hub--render-plain-list node target))
       ('quote-block (ox-hub--render-quote-block node target))
       ('table (ox-hub--render-table node target))
+      ('horizontal-rule "-----\n\n")
+      ('special-block (ox-hub--render-special-block node target))
       (_ (error "Unsupported Org element: %s" (org-element-type node)))))))
 
 (defun ox-hub--render-post-blank (node)
@@ -379,6 +386,123 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
 (defun ox-hub--format-markdown-table-row (cells)
   "Format CELLS as one Markdown table row."
   (concat "| " (mapconcat #'identity cells " | ") " |"))
+
+(defun ox-hub--render-footnote-reference (node)
+  "Render footnote-reference NODE as Markdown."
+  (concat (format "[^%s]" (org-element-property :label node))
+          (ox-hub--render-post-blank node)))
+
+(defun ox-hub--render-footnote-definition (node target)
+  "Render footnote-definition NODE as Markdown for TARGET."
+  (let ((label (org-element-property :label node))
+        (content (string-trim-right (ox-hub--render-contents node target))))
+    (format "[^%s]: %s\n\n"
+            label
+            (replace-regexp-in-string "\n" "\n    " content nil t))))
+
+(defun ox-hub--parse-directive-parameters (parameters)
+  "Parse oxhub directive PARAMETERS into a plist.
+The first plist value is stored as :directive."
+  (let ((tokens (split-string-and-unquote (or parameters ""))))
+    (unless tokens
+      (error "Missing oxhub directive"))
+    (let ((plist (list :directive (car tokens)))
+          (rest (cdr tokens)))
+      (while rest
+        (let ((key (car rest))
+              (value (cadr rest)))
+          (unless (and key value (string-prefix-p ":" key))
+            (error "Invalid oxhub directive parameters: %s" parameters))
+          (setq plist (plist-put plist (intern key) value))
+          (setq rest (cddr rest))))
+      plist)))
+
+(defun ox-hub--require-directive-parameter (plist key directive)
+  "Return required KEY from PLIST for DIRECTIVE, or signal an error."
+  (let ((value (plist-get plist key)))
+    (unless (and value (not (string-empty-p value)))
+      (error "Missing %s parameter for oxhub %s" key directive))
+    value))
+
+(defun ox-hub--render-special-block (node target)
+  "Render special-block NODE for TARGET."
+  (unless (equal (org-element-property :type node) "oxhub")
+    (error "Unsupported Org special block: %s"
+           (org-element-property :type node)))
+  (unless target
+    (error "oxhub directives require an export target"))
+  (let* ((parameters (ox-hub--parse-directive-parameters
+                      (org-element-property :parameters node)))
+         (directive (plist-get parameters :directive)))
+    (pcase directive
+      ("message" (ox-hub--render-message-directive node target parameters))
+      ("details" (ox-hub--render-details-directive node target parameters))
+      ("codefile" (ox-hub--render-codefile-directive node target parameters))
+      (_ (error "Unsupported oxhub directive: %s" directive)))))
+
+(defun ox-hub--render-message-directive (node target parameters)
+  "Render oxhub message directive NODE for TARGET using PARAMETERS."
+  (let* ((type (or (plist-get parameters :type) "info"))
+         (content (string-trim-right (ox-hub--render-contents node target))))
+    (unless (member type '("info" "alert"))
+      (error "Invalid oxhub message type: %s" type))
+    (pcase target
+      ('zenn
+       (format ":::message%s\n%s\n:::\n\n"
+               (if (equal type "alert") " alert" "")
+               content))
+      ('qiita
+       (ox-hub--render-blockquote
+        (if (equal type "alert")
+            (concat "**Warning:**\n\n" content)
+          content)))
+      (_ (error "Unsupported export target: %s" target)))))
+
+(defun ox-hub--render-details-directive (node target parameters)
+  "Render oxhub details directive NODE for TARGET using PARAMETERS."
+  (let ((summary (ox-hub--require-directive-parameter
+                  parameters :summary "details"))
+        (content (string-trim-right (ox-hub--render-contents node target))))
+    (pcase target
+      ('zenn
+       (format ":::details %s\n%s\n:::\n\n" summary content))
+      ('qiita
+       (format "<details><summary>%s</summary>\n\n%s\n\n</details>\n\n"
+               summary
+               content))
+      (_ (error "Unsupported export target: %s" target)))))
+
+(defun ox-hub--render-codefile-directive (node target parameters)
+  "Render oxhub codefile directive NODE for TARGET using PARAMETERS."
+  (let ((language (ox-hub--require-directive-parameter
+                   parameters :lang "codefile"))
+        (filename (ox-hub--require-directive-parameter
+                   parameters :filename "codefile"))
+        (content (string-trim-right (ox-hub--raw-contents node target))))
+    (pcase target
+      ((or 'zenn 'qiita)
+       (format "```%s:%s\n%s\n```\n\n" language filename content))
+      (_ (error "Unsupported export target: %s" target)))))
+
+(defun ox-hub--raw-contents (node target)
+  "Return raw contents of NODE, falling back to rendered contents for TARGET."
+  (let ((begin (org-element-property :contents-begin node))
+        (end (org-element-property :contents-end node))
+        (buffer (org-element-property :buffer node)))
+    (if (and begin end (buffer-live-p buffer))
+        (with-current-buffer buffer
+          (buffer-substring-no-properties begin end))
+      (ox-hub--render-contents node target))))
+
+(defun ox-hub--render-blockquote (content)
+  "Render CONTENT as a Markdown blockquote."
+  (concat (mapconcat (lambda (line)
+                       (if (string-empty-p line)
+                           ">"
+                         (concat "> " line)))
+                     (split-string (string-trim-right content) "\n")
+                     "\n")
+          "\n\n"))
 
 (defun ox-hub--current-article-slug ()
   "Return the current Org article slug from `buffer-file-name'."

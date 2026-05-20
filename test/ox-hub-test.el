@@ -270,11 +270,35 @@
     (should (equal (ox-hub--render-body ast)
                    "Text **bold** *italic* `code` `verbatim` [Example](https://example.com) [Notes](notes.org) ![](image.png)\n"))))
 
+(ert-deftest ox-hub-render-body-renders-strike-through ()
+  (let ((ast (ox-hub-test--parse-string
+              "Text +deleted+ text\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "Text ~~deleted~~ text\n"))))
+
+(ert-deftest ox-hub-render-body-renders-horizontal-rule ()
+  (let ((ast (ox-hub-test--parse-string
+              "Before\n\n-----\n\nAfter\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "Before\n\n-----\n\nAfter\n"))))
+
+(ert-deftest ox-hub-render-body-renders-footnotes ()
+  (let ((ast (ox-hub-test--parse-string
+              "Footnote ref[fn:one].\n\n[fn:one] Footnote body\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "Footnote ref[^one].\n\n[^one]: Footnote body\n"))))
+
 (ert-deftest ox-hub-render-body-renders-code-blocks ()
   (let ((ast (ox-hub-test--parse-string
               "#+begin_src emacs-lisp\n(message \"hi\")\n#+end_src\n\n#+begin_example\nplain text\n#+end_example\n")))
     (should (equal (ox-hub--render-body ast)
                    "```emacs-lisp\n(message \"hi\")\n```\n\n```\nplain text\n```\n"))))
+
+(ert-deftest ox-hub-render-body-renders-mermaid-src-block ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_src mermaid\ngraph TD\n  A-->B\n#+end_src\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "```mermaid\ngraph TD\n  A-->B\n```\n"))))
 
 (ert-deftest ox-hub-render-body-renders-lists ()
   (let ((ast (ox-hub-test--parse-string
@@ -298,6 +322,75 @@
   (let ((ast (ox-hub-test--parse-string
               "#+begin_note\nUnsupported\n#+end_note\n")))
     (should-error (ox-hub--render-body ast))))
+
+(ert-deftest ox-hub-render-body-renders-zenn-message-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub message\nInfo *body*\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'zenn)
+                   ":::message\nInfo **body**\n:::\n"))))
+
+(ert-deftest ox-hub-render-body-renders-qiita-message-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub message\nInfo *body*\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'qiita)
+                   "> Info **body**\n"))))
+
+(ert-deftest ox-hub-render-body-renders-zenn-alert-message-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub message :type alert\nAlert *body*\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'zenn)
+                   ":::message alert\nAlert **body**\n:::\n"))))
+
+(ert-deftest ox-hub-render-body-renders-qiita-alert-message-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub message :type alert\nAlert *body*\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'qiita)
+                   "> **Warning:**\n>\n> Alert **body**\n"))))
+
+(ert-deftest ox-hub-render-body-renders-zenn-details-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub details :summary \"Summary text\"\nDetails *body*\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'zenn)
+                   ":::details Summary text\nDetails **body**\n:::\n"))))
+
+(ert-deftest ox-hub-render-body-renders-qiita-details-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub details :summary \"Summary text\"\nDetails *body*\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'qiita)
+                   "<details><summary>Summary text</summary>\n\nDetails **body**\n\n</details>\n"))))
+
+(ert-deftest ox-hub-render-body-renders-codefile-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub codefile :lang emacs-lisp :filename init.el\n(message \"hi\")\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'zenn)
+                   "```emacs-lisp:init.el\n(message \"hi\")\n```\n"))
+    (should (equal (ox-hub--render-body ast 'qiita)
+                   "```emacs-lisp:init.el\n(message \"hi\")\n```\n"))))
+
+(ert-deftest ox-hub-render-body-rejects-oxhub-directive-without-target ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub message\nInfo\n#+end_oxhub\n")))
+    (should-error (ox-hub--render-body ast))))
+
+(ert-deftest ox-hub-render-body-rejects-unsupported-oxhub-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub unknown\nInfo\n#+end_oxhub\n")))
+    (should-error (ox-hub--render-body ast 'zenn))))
+
+(ert-deftest ox-hub-render-body-rejects-invalid-message-type ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub message :type warning\nInfo\n#+end_oxhub\n")))
+    (should-error (ox-hub--render-body ast 'zenn))))
+
+(ert-deftest ox-hub-render-body-rejects-missing-details-summary ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub details\nInfo\n#+end_oxhub\n")))
+    (should-error (ox-hub--render-body ast 'zenn))))
+
+(ert-deftest ox-hub-render-body-rejects-missing-codefile-parameter ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub codefile :lang emacs-lisp\n(message \"hi\")\n#+end_oxhub\n")))
+    (should-error (ox-hub--render-body ast 'zenn))))
 
 (ert-deftest ox-hub-current-article-slug-uses-file-basename ()
   (ox-hub-test--with-temp-git-root (root source-file)
@@ -366,6 +459,22 @@
         (ox-hub-export-current-buffer-to-zenn))
       (should-not (equal (ox-hub-test--read-file-string output-file)
                          "old content\n")))))
+
+(ert-deftest ox-hub-export-current-buffer-renders-target-specific-directives ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
+          (zenn-file (expand-file-name "dist/zenn/articles/valid_slug-12.md" root))
+          (qiita-file (expand-file-name "dist/qiita/public/valid_slug-12.md" root)))
+      (make-directory (file-name-directory article-file) t)
+      (with-temp-file article-file
+        (insert (ox-hub-test--valid-article-content))
+        (insert "\n#+begin_oxhub message :type alert\nCareful\n#+end_oxhub\n"))
+      (with-current-buffer (find-file-noselect article-file)
+        (ox-hub-export-current-buffer))
+      (should (string-match-p ":::message alert\nCareful\n:::"
+                              (ox-hub-test--read-file-string zenn-file)))
+      (should (string-match-p "> \\*\\*Warning:\\*\\*\n>\n> Careful"
+                              (ox-hub-test--read-file-string qiita-file))))))
 
 (ert-deftest ox-hub-export-current-buffer-rejects-invalid-slug ()
   (ox-hub-test--with-temp-git-root (root source-file)
