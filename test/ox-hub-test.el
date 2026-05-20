@@ -318,6 +318,30 @@
     (should (equal (ox-hub--render-body ast)
                    "- one\n- two\n\n1. first\n2. second\n"))))
 
+(ert-deftest ox-hub-render-body-renders-nested-unordered-lists ()
+  (let ((ast (ox-hub-test--parse-string
+              "- parent\n  - child\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "- parent\n  - child\n"))))
+
+(ert-deftest ox-hub-render-body-renders-nested-ordered-lists ()
+  (let ((ast (ox-hub-test--parse-string
+              "1. parent\n   1. child\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "1. parent\n   1. child\n"))))
+
+(ert-deftest ox-hub-render-body-renders-mixed-nested-lists ()
+  (let ((ast (ox-hub-test--parse-string
+              "- parent\n  1. child\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "- parent\n  1. child\n"))))
+
+(ert-deftest ox-hub-render-body-renders-deeply-nested-lists ()
+  (let ((ast (ox-hub-test--parse-string
+              "- grandparent\n  - parent\n    - child\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "- grandparent\n  - parent\n    - child\n"))))
+
 (ert-deftest ox-hub-render-body-renders-quote-block ()
   (let ((ast (ox-hub-test--parse-string
               "#+begin_quote\nquoted *text*\nsecond line\n#+end_quote\n")))

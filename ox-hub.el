@@ -299,13 +299,11 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
 
 (defun ox-hub--render-plain-list (node target)
   "Render plain-list NODE as a Markdown list for TARGET."
-  (let ((index 0)
-        previous-ordered
+  (let (previous-ordered
         seen-item
         rendered)
     (dolist (item (org-element-contents node))
-      (setq index (1+ index))
-      (let* ((marker (ox-hub--list-item-marker item index))
+      (let* ((marker (ox-hub--list-item-marker item))
              (ordered (ox-hub--ordered-list-marker-p marker))
              (item-text (ox-hub--render-list-item item target marker)))
         (setq rendered
@@ -323,8 +321,8 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
   "Return non-nil when MARKER is an ordered Markdown list marker."
   (string-match-p "\\`[0-9]+\\. " marker))
 
-(defun ox-hub--list-item-marker (node index)
-  "Return Markdown list marker for item NODE at INDEX."
+(defun ox-hub--list-item-marker (node)
+  "Return Markdown list marker for item NODE."
   (let ((bullet (or (org-element-property :bullet node) "")))
     (if (string-match "\\`\\([0-9]+\\)[.)][ \t]*\\'" bullet)
         (format "%s. " (match-string 1 bullet))
@@ -332,14 +330,51 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
 
 (defun ox-hub--render-list-item (node target marker)
   "Render list item NODE with Markdown MARKER for TARGET."
-  (let* ((content (string-trim-right (ox-hub--render-contents node target)))
-         (lines (split-string content "\n")))
+  (let* ((content (ox-hub--join-list-item-parts
+                   (ox-hub--render-list-item-parts node target)))
+         (lines (split-string content "\n"))
+         (first-line t)
+         (indent (make-string (length marker) ? )))
     (mapconcat (lambda (line)
-                 (if (eq line (car lines))
-                     (concat marker line)
-                   (concat (make-string (length marker) ? ) line)))
+                 (prog1
+                     (cond
+                      (first-line (concat marker line))
+                      ((string-empty-p line) "")
+                      (t (concat indent line)))
+                   (setq first-line nil)))
                lines
                "\n")))
+
+(defun ox-hub--render-list-item-parts (node target)
+  "Render direct child parts of list item NODE for TARGET."
+  (let (parts)
+    (dolist (child (org-element-contents node))
+      (let ((rendered (string-trim-right
+                       (ox-hub--render-node child target))))
+        (unless (string-empty-p rendered)
+          (setq parts
+                (cons (cons (org-element-type child) rendered)
+                      parts)))))
+    (nreverse parts)))
+
+(defun ox-hub--join-list-item-parts (parts)
+  "Join rendered list item PARTS without extra blanks around nested lists."
+  (let (rendered
+        previous-type)
+    (dolist (part parts)
+      (let ((type (car part))
+            (text (cdr part)))
+        (setq rendered
+              (if rendered
+                  (concat rendered
+                          (if (or (eq previous-type 'plain-list)
+                                  (eq type 'plain-list))
+                              "\n"
+                            "\n\n")
+                          text)
+                text))
+        (setq previous-type type)))
+    (or rendered "")))
 
 (defun ox-hub--render-link (node target)
   "Render link NODE as Markdown for TARGET."
