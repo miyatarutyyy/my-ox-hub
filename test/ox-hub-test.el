@@ -294,6 +294,18 @@
     (should (equal (ox-hub--render-body ast)
                    "```emacs-lisp\n(message \"hi\")\n```\n\n```\nplain text\n```\n"))))
 
+(ert-deftest ox-hub-render-body-extends-code-fence-for-src-block ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_src text\n```\n#+end_src\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "````text\n```\n````\n"))))
+
+(ert-deftest ox-hub-render-body-extends-code-fence-for-example-block ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_example\n```\n#+end_example\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "````\n```\n````\n"))))
+
 (ert-deftest ox-hub-render-body-renders-mermaid-src-block ()
   (let ((ast (ox-hub-test--parse-string
               "#+begin_src mermaid\ngraph TD\n  A-->B\n#+end_src\n")))
@@ -366,6 +378,14 @@
                    "```emacs-lisp:init.el\n(message \"hi\")\n```\n"))
     (should (equal (ox-hub--render-body ast 'qiita)
                    "```emacs-lisp:init.el\n(message \"hi\")\n```\n"))))
+
+(ert-deftest ox-hub-render-body-extends-code-fence-for-codefile-directive ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub codefile :lang text :filename f.txt\n```\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'zenn)
+                   "````text:f.txt\n```\n````\n"))
+    (should (equal (ox-hub--render-body ast 'qiita)
+                   "````text:f.txt\n```\n````\n"))))
 
 (ert-deftest ox-hub-render-body-rejects-oxhub-directive-without-target ()
   (let ((ast (ox-hub-test--parse-string

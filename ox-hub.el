@@ -268,16 +268,34 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
             "\n\n"
             contents)))
 
+(defun ox-hub--markdown-code-fence (content)
+  "Return a Markdown code fence longer than any backtick run in CONTENT."
+  (let ((max-run 0)
+        (start 0)
+        match-length)
+    (while (string-match "`+" content start)
+      (setq match-length (- (match-end 0) (match-beginning 0)))
+      (setq max-run (max max-run match-length))
+      (setq start (match-end 0)))
+    (make-string (max 3 (1+ max-run)) ?`)))
+
+(defun ox-hub--render-fenced-code-block (info content)
+  "Render CONTENT as a fenced Markdown code block with INFO."
+  (let* ((value (string-trim-right (or content "")))
+         (fence (ox-hub--markdown-code-fence value)))
+    (format "%s%s\n%s\n%s\n\n" fence (or info "") value fence)))
+
 (defun ox-hub--render-src-block (node)
   "Render src-block NODE as a fenced Markdown code block."
-  (let ((language (or (org-element-property :language node) ""))
-        (value (string-trim-right (or (org-element-property :value node) ""))))
-    (format "```%s\n%s\n```\n\n" language value)))
+  (ox-hub--render-fenced-code-block
+   (or (org-element-property :language node) "")
+   (or (org-element-property :value node) "")))
 
 (defun ox-hub--render-example-block (node)
   "Render example-block NODE as a fenced Markdown code block."
-  (let ((value (string-trim-right (or (org-element-property :value node) ""))))
-    (format "```\n%s\n```\n\n" value)))
+  (ox-hub--render-fenced-code-block
+   ""
+   (or (org-element-property :value node) "")))
 
 (defun ox-hub--render-plain-list (node target)
   "Render plain-list NODE as a Markdown list for TARGET."
@@ -478,10 +496,12 @@ The first plist value is stored as :directive."
                    parameters :lang "codefile"))
         (filename (ox-hub--require-directive-parameter
                    parameters :filename "codefile"))
-        (content (string-trim-right (ox-hub--raw-contents node target))))
+        (content (ox-hub--raw-contents node target)))
     (pcase target
       ((or 'zenn 'qiita)
-       (format "```%s:%s\n%s\n```\n\n" language filename content))
+       (ox-hub--render-fenced-code-block
+        (format "%s:%s" language filename)
+        content))
       (_ (error "Unsupported export target: %s" target)))))
 
 (defun ox-hub--raw-contents (node target)
