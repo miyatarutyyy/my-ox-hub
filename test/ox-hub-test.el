@@ -322,6 +322,18 @@
     (should (equal (ox-hub--render-body ast)
                    "- one\n- two\n\n1. first\n2. second\n"))))
 
+(ert-deftest ox-hub-render-body-renders-multi-paragraph-unordered-list-items ()
+  (let ((ast (ox-hub-test--parse-string
+              "- first paragraph\n\n  second paragraph\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "- first paragraph\n\n    second paragraph\n"))))
+
+(ert-deftest ox-hub-render-body-renders-multi-paragraph-ordered-list-items ()
+  (let ((ast (ox-hub-test--parse-string
+              "1. first paragraph\n\n   second paragraph\n")))
+    (should (equal (ox-hub--render-body ast)
+                   "1. first paragraph\n\n      second paragraph\n"))))
+
 (ert-deftest ox-hub-render-body-renders-nested-unordered-lists ()
   (let ((ast (ox-hub-test--parse-string
               "- parent\n  - child\n")))
