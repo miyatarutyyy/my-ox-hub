@@ -25,6 +25,36 @@
     :qiita-private "false"
     :qiita-slide "nil"))
 
+(defmacro ox-hub-test--with-temp-git-root (bindings &rest body)
+  "Create a temporary Git ROOT and evaluate BODY from SOURCE-FILE."
+  (declare (indent 1))
+  (let ((root (car bindings))
+        (source-file (cadr bindings)))
+    `(let* ((,root (make-temp-file "ox-hub-test-" t))
+            (,source-file (expand-file-name "current.org" ,root)))
+       (unwind-protect
+           (progn
+             (make-directory (expand-file-name ".git" ,root))
+             (with-temp-file ,source-file)
+             (with-current-buffer (find-file-noselect ,source-file)
+               ,@body))
+         (dolist (buffer (buffer-list))
+           (let ((file (buffer-file-name buffer)))
+             (when (and file (file-in-directory-p file ,root))
+               (kill-buffer buffer))))
+         (when (file-directory-p ,root)
+           (delete-directory ,root t))))))
+
+(defun ox-hub-test--read-file-string (file)
+  "Return FILE contents as a string."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (buffer-string)))
+
+(ert-deftest ox-hub-new-article-template-returns-default-metadata ()
+  (should (equal (ox-hub--new-article-template)
+                 "#+OXHUB_TITLE:\n#+OXHUB_TAGS:\n#+OXHUB_STATUS: draft\n#+OXHUB_ZENN_EMOJI: 📝\n#+OXHUB_ZENN_TYPE: tech\n#+OXHUB_QIITA_PRIVATE: false\n#+OXHUB_QIITA_SLIDE: false\n\n")))
+
 (ert-deftest ox-hub-valid-slug-p-accepts-valid-slugs ()
   (should (ox-hub--valid-slug-p "valid_slug-12"))
   (should (ox-hub--valid-slug-p (make-string 50 ?a))))
@@ -36,6 +66,43 @@
   (should-not (ox-hub--valid-slug-p "invalid slug1"))
   (should-not (ox-hub--valid-slug-p "invalid.slug1"))
   (should-not (ox-hub--valid-slug-p "invalid/slug1")))
+
+(ert-deftest ox-hub-new-article-creates-org-file-and-opens-it ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (let* ((slug "valid_slug-12")
+           (article-file (expand-file-name "org/valid_slug-12.org" root))
+           (created-file (ox-hub-new-article slug)))
+      (should (equal created-file article-file))
+      (should (file-exists-p article-file))
+      (should (equal (buffer-file-name) article-file))
+      (should (equal (ox-hub-test--read-file-string article-file)
+                     (ox-hub--new-article-template))))))
+
+(ert-deftest ox-hub-new-article-creates-org-directory ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (let ((org-dir (expand-file-name "org" root)))
+      (should-not (file-directory-p org-dir))
+      (ox-hub-new-article "valid_slug-12")
+      (should (file-directory-p org-dir)))))
+
+(ert-deftest ox-hub-new-article-rejects-invalid-slug ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (should-error (ox-hub-new-article "Invalid slug") :type 'user-error)
+    (should-not (file-directory-p (expand-file-name "org" root)))))
+
+(ert-deftest ox-hub-new-article-rejects-existing-file ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (let ((article-file (expand-file-name "org/valid_slug-12.org" root)))
+      (make-directory (file-name-directory article-file) t)
+      (with-temp-file article-file
+        (insert "existing content\n"))
+      (should-error (ox-hub-new-article "valid_slug-12") :type 'user-error)
+      (should (equal (ox-hub-test--read-file-string article-file)
+                     "existing content\n")))))
+
+(ert-deftest ox-hub-new-article-rejects-non-file-buffer ()
+  (with-temp-buffer
+    (should-error (ox-hub-new-article "valid_slug-12") :type 'user-error)))
 
 (ert-deftest ox-hub-parse-boolean-accepts-valid-values ()
   (should (eq (ox-hub--parse-boolean "true") t))

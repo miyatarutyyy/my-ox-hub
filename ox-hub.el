@@ -30,6 +30,17 @@
   '(:title :tags :status :zenn-emoji :zenn-type :qiita-private :qiita-slide)
   "Metadata keys required for export.")
 
+(defun ox-hub--new-article-template ()
+  "Return the default Org metadata template for a new article."
+  (concat "#+OXHUB_TITLE:\n"
+          "#+OXHUB_TAGS:\n"
+          "#+OXHUB_STATUS: draft\n"
+          "#+OXHUB_ZENN_EMOJI: 📝\n"
+          "#+OXHUB_ZENN_TYPE: tech\n"
+          "#+OXHUB_QIITA_PRIVATE: false\n"
+          "#+OXHUB_QIITA_SLIDE: false\n"
+          "\n"))
+
 (defun ox-hub--valid-slug-p (slug)
   "Return non-nil when SLUG is valid for an ox-hub article."
   (and (stringp slug)
@@ -184,6 +195,23 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
             (ox-hub--yaml-boolean (plist-get metadata :qiita-private))
             (ox-hub--yaml-boolean (plist-get metadata :qiita-slide))
             (ox-hub--yaml-boolean (not (ox-hub--published-p metadata))))))
+
+;;;###autoload
+(defun ox-hub-new-article (slug)
+  "Create a new Org article for SLUG under the Git root."
+  (interactive "sArticle slug: ")
+  (unless (ox-hub--valid-slug-p slug)
+    (user-error "Invalid article slug: %s" slug))
+  (let* ((root (ox-hub--git-root))
+         (org-dir (expand-file-name "org" root))
+         (article-file (expand-file-name (concat slug ".org") org-dir)))
+    (when (file-exists-p article-file)
+      (user-error "Article already exists: %s" article-file))
+    (make-directory org-dir t)
+    (write-region (ox-hub--new-article-template) nil article-file nil 'silent)
+    (find-file article-file)
+    (message "Created article: %s" article-file)
+    article-file))
 
 (provide 'ox-hub)
 
