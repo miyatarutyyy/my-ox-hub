@@ -138,6 +138,10 @@
   (should (equal (ox-hub--yaml-escape-string "a\\b\"c\nd")
                  "a\\\\b\\\"c\\nd")))
 
+(ert-deftest ox-hub-html-escape-string-escapes-special-characters ()
+  (should (equal (ox-hub--html-escape-string "A < B & C > \"D\"")
+                 "A &lt; B &amp; C &gt; &quot;D&quot;")))
+
 (ert-deftest ox-hub-extract-metadata-reads-oxhub-keywords ()
   (let* ((ast (ox-hub-test--parse-string
                "#+OXHUB_TITLE: Example\n#+OXHUB_STATUS: draft\n#+AUTHOR: Someone\n"))
@@ -394,6 +398,12 @@
               "#+begin_oxhub details :summary \"Summary text\"\nDetails *body*\n#+end_oxhub\n")))
     (should (equal (ox-hub--render-body ast 'qiita)
                    "<details><summary>Summary text</summary>\n\nDetails **body**\n\n</details>\n"))))
+
+(ert-deftest ox-hub-render-body-escapes-qiita-details-summary ()
+  (let ((ast (ox-hub-test--parse-string
+              "#+begin_oxhub details :summary \"A < B & C > D\"\nDetails body\n#+end_oxhub\n")))
+    (should (equal (ox-hub--render-body ast 'qiita)
+                   "<details><summary>A &lt; B &amp; C &gt; D</summary>\n\nDetails body\n\n</details>\n"))))
 
 (ert-deftest ox-hub-render-body-renders-codefile-directive ()
   (let ((ast (ox-hub-test--parse-string

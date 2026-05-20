@@ -144,6 +144,18 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
   "Return VALUE as a YAML double-quoted string."
   (format "\"%s\"" (ox-hub--yaml-escape-string value)))
 
+(defun ox-hub--html-escape-string (value)
+  "Escape VALUE for use as HTML text."
+  (mapconcat (lambda (char)
+               (pcase char
+                 (?& "&amp;")
+                 (?< "&lt;")
+                 (?> "&gt;")
+                 (?\" "&quot;")
+                 (_ (char-to-string char))))
+             value
+             ""))
+
 (defun ox-hub--published-p (metadata)
   "Return non-nil when METADATA should be published."
   (equal (plist-get metadata :status) "published"))
@@ -521,7 +533,7 @@ The first plist value is stored as :directive."
        (format ":::details %s\n%s\n:::\n\n" summary content))
       ('qiita
        (format "<details><summary>%s</summary>\n\n%s\n\n</details>\n\n"
-               summary
+               (ox-hub--html-escape-string summary)
                content))
       (_ (error "Unsupported export target: %s" target)))))
 
