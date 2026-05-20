@@ -380,6 +380,53 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
   "Format CELLS as one Markdown table row."
   (concat "| " (mapconcat #'identity cells " | ") " |"))
 
+(defun ox-hub--current-article-slug ()
+  "Return the current Org article slug from `buffer-file-name'."
+  (unless buffer-file-name
+    (user-error "Current buffer is not visiting a file"))
+  (let ((slug (file-name-base buffer-file-name)))
+    (unless (ox-hub--valid-slug-p slug)
+      (user-error "Invalid article slug: %s" slug))
+    slug))
+
+(defun ox-hub--target-output-file (root slug target)
+  "Return output path under ROOT for article SLUG and TARGET."
+  (pcase target
+    ('zenn (expand-file-name (concat "dist/zenn/articles/" slug ".md") root))
+    ('qiita (expand-file-name (concat "dist/qiita/public/" slug ".md") root))
+    (_ (error "Unsupported export target: %s" target))))
+
+(defun ox-hub--render-front-matter (metadata target)
+  "Render front matter from METADATA for TARGET."
+  (pcase target
+    ('zenn (ox-hub--render-zenn-front-matter metadata))
+    ('qiita (ox-hub--render-qiita-front-matter metadata))
+    (_ (error "Unsupported export target: %s" target))))
+
+(defun ox-hub--render-document (ast target)
+  "Render full Markdown document from Org AST for TARGET."
+  (let* ((metadata (ox-hub--validate-metadata
+                    (ox-hub--extract-metadata ast)))
+         (front-matter (ox-hub--render-front-matter metadata target))
+         (body (ox-hub--render-body ast target)))
+    (concat front-matter "\n" body)))
+
+(defun ox-hub--write-file (file content)
+  "Write CONTENT to FILE, creating parent directories."
+  (make-directory (file-name-directory file) t)
+  (write-region content nil file nil 'silent))
+
+(defun ox-hub--export-current-buffer-to-target (target)
+  "Export current Org buffer to TARGET and return the output file."
+  (let* ((slug (ox-hub--current-article-slug))
+         (root (ox-hub--git-root))
+         (ast (ox-hub--parse-buffer))
+         (output-file (ox-hub--target-output-file root slug target))
+         (content (ox-hub--render-document ast target)))
+    (ox-hub--write-file output-file content)
+    (message "Exported %s: %s" target output-file)
+    output-file))
+
 ;;;###autoload
 (defun ox-hub-new-article (slug)
   "Create a new Org article for SLUG under the Git root."
@@ -396,6 +443,25 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
     (find-file article-file)
     (message "Created article: %s" article-file)
     article-file))
+
+;;;###autoload
+(defun ox-hub-export-current-buffer ()
+  "Export the current Org buffer to Zenn and Qiita Markdown."
+  (interactive)
+  (list (ox-hub--export-current-buffer-to-target 'zenn)
+        (ox-hub--export-current-buffer-to-target 'qiita)))
+
+;;;###autoload
+(defun ox-hub-export-current-buffer-to-zenn ()
+  "Export the current Org buffer to Zenn Markdown."
+  (interactive)
+  (ox-hub--export-current-buffer-to-target 'zenn))
+
+;;;###autoload
+(defun ox-hub-export-current-buffer-to-qiita ()
+  "Export the current Org buffer to Qiita Markdown."
+  (interactive)
+  (ox-hub--export-current-buffer-to-target 'qiita))
 
 (provide 'ox-hub)
 
