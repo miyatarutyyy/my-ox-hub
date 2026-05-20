@@ -1,0 +1,24 @@
+# Generated exports
+/dist/
+
+# Emacs backup and autosave files
+*~
+\#*\#
+.\#*
+auto-save-list/
+tramp
+
+# Emacs Lisp build artifacts
+*.elc
+*.eln
+eln-cache/
+
+# Test and coverage output
+*.log
+coverage/
+
+# Local environment
+.env
+.env.*
+!.env.example
+.dir-locals-2.el

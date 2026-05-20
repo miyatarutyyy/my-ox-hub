@@ -1,0 +1,66 @@
+#+TITLE: ox-hub
+
+=ox-hub= is an Emacs package for writing one Org-mode source article and
+exporting Markdown for both Zenn and Qiita.
+
+The MVP treats =org/<slug>.org= as the source of truth and generates:
+
+- =dist/zenn/articles/<slug>.md=
+- =dist/qiita/public/<slug>.md=
+
+Publishing, Git push, Zenn CLI, Qiita CLI, and synchronization with remote
+posting state are outside the v1 scope.
+
+* Commands
+
+- =ox-hub-new-article=
+  - Create =org/<slug>.org= under the Git root.
+  - The slug must match =a-z0-9_-= and be 12 to 50 characters long.
+  - Existing files are rejected.
+
+- =ox-hub-export-current-buffer=
+  - Export the current Org buffer to both Zenn and Qiita Markdown.
+
+- =ox-hub-export-current-buffer-to-zenn=
+  - Export the current Org buffer to Zenn Markdown only.
+
+- =ox-hub-export-current-buffer-to-qiita=
+  - Export the current Org buffer to Qiita Markdown only.
+
+* Metadata
+
+Article metadata is written with =#+OXHUB_*:= keywords.
+
+Required fields:
+
+#+begin_src org
+#+OXHUB_TITLE:
+#+OXHUB_TAGS:
+#+OXHUB_STATUS:
+#+OXHUB_ZENN_EMOJI:
+#+OXHUB_ZENN_TYPE:
+#+OXHUB_QIITA_PRIVATE:
+#+OXHUB_QIITA_SLIDE:
+#+end_src
+
+=OXHUB_STATUS= is either =draft= or =published=.
+
+The status is rendered as:
+
+| OXHUB_STATUS | Zenn =published= | Qiita =ignorePublish= |
+|--------------+------------------+-----------------------|
+| =draft=      | =false=          | =true=                |
+| =published=  | =true=           | =false=               |
+
+=OXHUB_TAGS= is a comma-separated list. Empty tags are ignored, and at least
+one tag is required when exporting.
+
+Boolean metadata accepts =true=, =false=, =t=, and =nil=.
+
+* Test
+
+Run the ERT suite with:
+
+#+begin_src sh
+emacs --batch -l ert -l ox-hub.el -l test/ox-hub-test.el -f ert-run-tests-batch-and-exit
+#+end_src
