@@ -5,71 +5,69 @@
 [[https://zenn.dev/][https://img.shields.io/badge/Zenn-Markdown-3EA8FF.svg]]
 [[https://qiita.com/][https://img.shields.io/badge/Qiita-Markdown-55C500.svg]]
 
-English | [[file:README.ja.org][日本語]]
+[[file:README.org][English]] | 日本語
 
-=ox-hub= is an Emacs package for writing one Org-mode source article and
-exporting Markdown for both Zenn and Qiita.
+=ox-hub= は、1つの Org-mode 原稿から Zenn と Qiita の両方に向けた
+Markdown を生成する Emacs package です。
 
-The MVP treats =org/<slug>.org= as the source of truth and generates:
+MVP では =org/<slug>.org= を正本として扱い、次のファイルを生成します。
 
 - =dist/zenn/articles/<slug>.md=
 - =dist/qiita/public/<slug>.md=
 
-Publishing, Git push, Zenn CLI, Qiita CLI, and synchronization with remote
-posting state are outside the v1 scope.
+公開、Git push、Zenn CLI、Qiita CLI、リモート投稿状態との同期は v1 の範囲外です。
 
 * Installation
 
-Clone this repository and add it to =load-path=:
+この repository を clone し、=load-path= に追加します。
 
 #+begin_src emacs-lisp
 (add-to-list 'load-path "/path/to/ox-hub")
 (require 'ox-hub)
 #+end_src
 
-This is a source checkout workflow. Package archive installation is not
-provided yet.
+現時点では source checkout での利用を想定しています。package archive からの
+installation はまだ提供していません。
 
 * Commands
 
 - =ox-hub-new-article=
-  - Create =org/<slug>.org= under the Git root.
-  - The slug must match =a-z0-9_-= and be 12 to 50 characters long.
-  - Existing files are rejected.
-  - The new article is opened after creation.
+  - Git root 配下に =org/<slug>.org= を作成します。
+  - slug は =a-z0-9_-= の 12 文字以上 50 文字以下です。
+  - 既存ファイルがある場合は拒否します。
+  - 作成後、新しい記事ファイルを開きます。
 
 - =ox-hub-export-current-buffer=
-  - Export the current Org buffer to both Zenn and Qiita Markdown.
-  - Outputs are overwritten.
+  - 現在の Org buffer を Zenn と Qiita の Markdown に export します。
+  - 出力ファイルは上書きします。
 
 - =ox-hub-export-current-buffer-to-zenn=
-  - Export the current Org buffer to Zenn Markdown only.
+  - 現在の Org buffer を Zenn Markdown のみに export します。
 
 - =ox-hub-export-current-buffer-to-qiita=
-  - Export the current Org buffer to Qiita Markdown only.
+  - 現在の Org buffer を Qiita Markdown のみに export します。
 
 * Quick Start
 
-Create a new article from any file visiting buffer inside the target Git
-repository:
+対象 Git repository 内の file visiting buffer から新しい記事を作成します。
 
 #+begin_src text
 M-x ox-hub-new-article
 #+end_src
 
-Then enter a slug such as =my-first-note=. The command creates and opens:
+=my-first-note= のような slug を入力すると、次のファイルを作成して開きます。
 
 #+begin_src text
 org/my-first-note.org
 #+end_src
 
-Fill in =OXHUB_TITLE= and =OXHUB_TAGS=, write the body, then export:
+=OXHUB_TITLE= と =OXHUB_TAGS= を埋め、本文を書いてから export します。
 
 #+begin_src text
 M-x ox-hub-export-current-buffer
 #+end_src
 
-The command writes:
+この command は次のファイルを書き出します。
 
 #+begin_src text
 dist/zenn/articles/my-first-note.md
@@ -78,7 +76,7 @@ dist/qiita/public/my-first-note.md
 
 * End-to-end Example
 
-Source Org article:
+Org 原稿:
 
 #+begin_src org
 #+OXHUB_TITLE: Example Title
@@ -142,9 +140,9 @@ This is **bold** and `code`.
 
 * Metadata
 
-Article metadata is written with =#+OXHUB_*:= keywords.
+記事 metadata は =#+OXHUB_*:= keyword で書きます。
 
-Required fields:
+必須項目:
 
 #+begin_src org
 #+OXHUB_TITLE:
@@ -156,21 +154,21 @@ Required fields:
 #+OXHUB_QIITA_SLIDE:
 #+end_src
 
-=OXHUB_STATUS= is either =draft= or =published=.
+=OXHUB_STATUS= は =draft= または =published= です。
 
-The status is rendered as:
+status は次のように出力されます。
 
 | OXHUB_STATUS | Zenn =published= | Qiita =ignorePublish= |
 |--------------+------------------+-----------------------|
 | =draft=      | =false=          | =true=                |
 | =published=  | =true=           | =false=               |
 
-=OXHUB_TAGS= is a comma-separated list. Empty tags are ignored, and at least
-one tag is required when exporting.
+=OXHUB_TAGS= は comma-separated list です。空 tag は無視され、export 時には
+1つ以上の tag が必要です。
 
-Boolean metadata accepts =true=, =false=, =t=, and =nil=.
+boolean metadata は =true=, =false=, =t=, =nil= を受け付けます。
 
-New articles start with:
+新規記事は次の雛形で作成されます。
 
 #+begin_src org
 #+OXHUB_TITLE:
@@ -184,7 +182,7 @@ New articles start with:
 
 * Supported Org Syntax
 
-The common renderer supports:
+共通 renderer は次の Org 記法を扱います。
 
 | Org syntax                  | Markdown output                         |
 |-----------------------------+-----------------------------------------|
@@ -207,11 +205,11 @@ The common renderer supports:
 | =[fn:label] body=           | footnote definition                     |
 | =#+begin_src mermaid=       | fenced =mermaid= block                  |
 
-Unsupported Org elements fail the export instead of being silently dropped.
+未対応の Org 要素に遭遇した場合、黙って落とさず export を失敗させます。
 
 * oxhub Directives
 
-Zenn/Qiita-specific body syntax is represented with Org special blocks:
+Zenn/Qiita 固有の本文記法は Org special block で表現します。
 
 #+begin_src org
 #+begin_oxhub message :type info
@@ -219,7 +217,7 @@ Informational message.
 #+end_oxhub
 #+end_src
 
-=:type= may be =info= or =alert=. =info= is the default.
+=:type= は =info= または =alert= です。省略時は =info= です。
 
 Zenn output:
 
@@ -235,10 +233,10 @@ Qiita output:
 > Informational message.
 #+end_src
 
-Alert messages become =:::message alert= for Zenn and a blockquote with
-=**Warning:**= for Qiita.
+alert message は Zenn では =:::message alert=、Qiita では =**Warning:**= 付きの
+blockquote になります。
 
-Details blocks require =:summary=:
+details block には =:summary= が必要です。
 
 #+begin_src org
 #+begin_oxhub details :summary "More details"
@@ -246,9 +244,10 @@ Hidden body.
 #+end_oxhub
 #+end_src
 
-Zenn output uses =:::details=. Qiita output uses a =<details>= HTML block.
+Zenn output は =:::details= を使います。Qiita output は =<details>= HTML block
+を使います。
 
-File-name code blocks require =:lang= and =:filename=:
+ファイル名付き code block には =:lang= と =:filename= が必要です。
 
 #+begin_src org
 #+begin_oxhub codefile :lang emacs-lisp :filename init.el
@@ -256,7 +255,7 @@ File-name code blocks require =:lang= and =:filename=:
 #+end_oxhub
 #+end_src
 
-Both targets output:
+どちらの target でも次のように出力します。
 
 #+begin_src markdown
 ```emacs-lisp:init.el
@@ -264,25 +263,24 @@ Both targets output:
 ```
 #+end_src
 
-Unsupported =oxhub= directives, invalid message types, and missing required
-parameters fail the export.
+未対応の =oxhub= directive、不正な message type、必須 parameter の欠落は
+export error になります。
 
 * Limitations
 
-The v1 package intentionally does not run Zenn CLI, Qiita CLI, preview,
-publish, Git push, or remote posting-state synchronization.
+v1 package は Zenn CLI、Qiita CLI、preview、publish、Git push、リモート投稿状態との
+同期を実行しません。
 
-Assets are not copied. =[[file:...]]= links are converted to Markdown links or
-image references as-is.
+asset copy は行いません。=[[file:...]]= link はそのまま Markdown link または
+image reference に変換されます。
 
-Platform-specific syntax beyond =message=, =details=, and =codefile= is not
-implemented yet. Examples include Zenn image width/caption helpers, Zenn
-embeds, platform-specific diff helpers, PlantUML, Qiita color chips, and Qiita
-HTML extensions.
+=message=, =details=, =codefile= 以外の platform-specific syntax はまだ未実装です。
+例として、Zenn の画像幅/キャプション helper、Zenn embed、platform-specific diff
+helper、PlantUML、Qiita color chip、Qiita HTML extension などがあります。
 
 * Test
 
-Run the ERT suite with:
+ERT suite は次の command で実行します。
 
 #+begin_src sh
 emacs --batch -l ert -l ox-hub.el -l test/ox-hub-test.el -f ert-run-tests-batch-and-exit
