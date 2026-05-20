@@ -188,7 +188,7 @@ boolean metadata は =true=, =false=, =t=, =nil= を受け付けます。
 |-----------------------------+-----------------------------------------|
 | =*=, =**= headings          | =#=, =##= headings                      |
 | paragraphs                  | paragraphs                              |
-| unordered / ordered lists   | Markdown lists                          |
+| unordered / ordered lists   | Markdown lists, including nested lists  |
 | =[[url][text]]=             | =[text](url)=                           |
 | =[[file:image.png]]=        | =![](image.png)=                        |
 | =[[file:notes.org][Notes]]= | =[Notes](notes.org)=                    |
