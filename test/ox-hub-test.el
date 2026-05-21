@@ -553,6 +553,12 @@
                  "/repo/public/valid_slug-12.md"))
   (should-error (ox-hub--target-output-file "/repo" "valid_slug-12" 'other)))
 
+(ert-deftest ox-hub-target-output-directories-match-cli-root-layout ()
+  (should (equal (alist-get 'zenn ox-hub--target-output-directories)
+                 "articles"))
+  (should (equal (alist-get 'qiita ox-hub--target-output-directories)
+                 "public")))
+
 (ert-deftest ox-hub-export-current-buffer-to-zenn-writes-markdown ()
   (ox-hub-test--with-temp-git-root (root source-file)
     (let ((article-file (expand-file-name "org/valid_slug-12.org" root))

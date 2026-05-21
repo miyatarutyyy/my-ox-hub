@@ -34,6 +34,11 @@
   '("avif" "gif" "jpeg" "jpg" "png" "svg" "webp")
   "File extensions treated as images in Markdown links.")
 
+(defconst ox-hub--target-output-directories
+  '((zenn . "articles")
+    (qiita . "public"))
+  "Git-root relative output directories for each export target.")
+
 (defconst ox-hub--qiita-cli-managed-fields
   '(("updated_at" . :qiita-updated-at)
     ("id" . :qiita-id)
@@ -617,10 +622,10 @@ The first plist value is stored as :directive."
 
 (defun ox-hub--target-output-file (root slug target)
   "Return output path under ROOT for article SLUG and TARGET."
-  (pcase target
-    ('zenn (expand-file-name (concat "articles/" slug ".md") root))
-    ('qiita (expand-file-name (concat "public/" slug ".md") root))
-    (_ (error "Unsupported export target: %s" target))))
+  (let ((directory (alist-get target ox-hub--target-output-directories)))
+    (unless directory
+      (error "Unsupported export target: %s" target))
+    (expand-file-name (concat directory "/" slug ".md") root)))
 
 (defun ox-hub--read-qiita-cli-metadata (file)
   "Read Qiita CLI managed metadata from Markdown FILE."

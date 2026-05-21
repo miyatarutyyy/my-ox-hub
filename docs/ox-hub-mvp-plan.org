@@ -49,18 +49,22 @@ v1 では以下の interactive command を提供する。
 
 #+begin_src text
 .
-|-- org/
-|   `-- example-slug.org
 |-- articles/
 |   `-- example-slug.md
+|-- books/
+|-- dist/
 |-- images/
+|-- node_modules/
+|-- org/
+|   `-- example-slug.org
+|-- package.json
+|-- package-lock.json
 |-- public/
 |   `-- example-slug.md
-|-- src/
-`-- .gitignore
+`-- qiita.config.json
 #+end_src
 
-=org/= はユーザーが編集する正本を置く。=articles/= と =public/= は生成物であり、手編集しない前提とする。=images/= は Zenn CLI が repository root から読む画像実体を置く。
+=org/= はユーザーが編集する正本を置く。=articles/= は Zenn 用記事、=public/= は Qiita 用記事として ox-hub が生成する。=images/= は Zenn CLI が repository root から読む画像実体を置く。=books/=, =dist/=, =node_modules/=, =package.json=, =package-lock.json=, =qiita.config.json= は各 CLI や周辺 tooling のために repository root に存在し得るが、ox-hub は =articles/= と =public/= 以外へ Markdown を出力しない。
 
 * Metadata Specification
 
@@ -147,7 +151,7 @@ v1 で対応する Org 要素:
 
 未対応要素に遭遇した場合は warning ではなく error にする。
 
-画像や添付ファイルはコピーしない。=[[file:...]]= は Markdown の参照リンクまたは画像リンクに変換するだけとする。画像アップロード、=dist/= への asset copy、投稿先別 asset 管理は v1 では扱わない。
+画像や添付ファイルはコピーしない。=[[file:...]]= は Markdown の参照リンクまたは画像リンクに変換するだけとする。画像アップロード、=images/= への asset copy、投稿先別 asset 管理は v1 では扱わない。
 
 * Structured Directives
 
