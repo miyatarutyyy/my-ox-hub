@@ -112,9 +112,18 @@
       (should (equal (ox-hub-test--read-file-string article-file)
                      "existing content\n")))))
 
-(ert-deftest ox-hub-new-article-rejects-non-file-buffer ()
+(ert-deftest ox-hub-new-article-creates-from-non-file-buffer-default-directory ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (let ((article-file (expand-file-name "org/valid_slug-12.org" root)))
+      (with-temp-buffer
+        (let ((default-directory root))
+          (should (equal (ox-hub-new-article "valid_slug-12") article-file))))
+      (should (file-exists-p article-file)))))
+
+(ert-deftest ox-hub-new-article-rejects-non-git-default-directory ()
   (with-temp-buffer
-    (should-error (ox-hub-new-article "valid_slug-12") :type 'user-error)))
+    (let ((default-directory "/"))
+      (should-error (ox-hub-new-article "valid_slug-12") :type 'user-error))))
 
 (ert-deftest ox-hub-parse-boolean-accepts-valid-values ()
   (should (eq (ox-hub--parse-boolean "true") t))

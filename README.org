@@ -34,6 +34,8 @@ provided yet.
 
 - =ox-hub-new-article=
   - Create =org/<slug>.org= under the Git root.
+  - The Git root is detected from the current file, or from
+    =default-directory= for buffers such as Dired.
   - The slug must match =a-z0-9_-= and be 12 to 50 characters long.
   - Existing files are rejected.
   - The new article is opened after creation.
@@ -50,8 +52,8 @@ provided yet.
 
 * Quick Start
 
-Create a new article from any file visiting buffer inside the target Git
-repository:
+Create a new article from a buffer whose current file or =default-directory=
+is inside the target Git repository:
 
 #+begin_src text
 M-x ox-hub-new-article

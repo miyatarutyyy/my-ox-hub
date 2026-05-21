@@ -54,11 +54,12 @@
          (string-match-p "\\`[a-z0-9_-]+\\'" slug))))
 
 (defun ox-hub--git-root (&optional file)
-  "Return the Git root for FILE or the current buffer.
-Signal `user-error' when there is no file or no Git root."
-  (let ((path (or file buffer-file-name)))
+  "Return the Git root for FILE or the current buffer context.
+When the current buffer is not visiting a file, use `default-directory'.
+Signal `user-error' when there is no Git root."
+  (let ((path (or file buffer-file-name default-directory)))
     (unless path
-      (user-error "Current buffer is not visiting a file"))
+      (user-error "Current buffer has no directory context"))
     (let ((root (locate-dominating-file path ".git")))
       (unless root
         (user-error "Git root not found"))

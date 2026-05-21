@@ -33,6 +33,8 @@ installation はまだ提供していません。
 
 - =ox-hub-new-article=
   - Git root 配下に =org/<slug>.org= を作成します。
+  - Git root は現在の file、または Dired などの buffer では
+    =default-directory= から検出します。
   - slug は =a-z0-9_-= の 12 文字以上 50 文字以下です。
   - 既存ファイルがある場合は拒否します。
   - 作成後、新しい記事ファイルを開きます。
@@ -49,7 +51,8 @@ installation はまだ提供していません。
 
 * Quick Start
 
-対象 Git repository 内の file visiting buffer から新しい記事を作成します。
+対象 Git repository 内の file visiting buffer、または =default-directory= が
+対象 repository 内にある buffer から新しい記事を作成します。
 
 #+begin_src text
 M-x ox-hub-new-article
