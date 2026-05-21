@@ -129,6 +129,9 @@ tags:
   - "emacs"
   - "org-mode"
 private: false
+updated_at: ""
+id: ""
+organization_url_name: ""
 slide: false
 ignorePublish: true
 ---
@@ -171,6 +174,10 @@ status は次のように出力されます。
 1つ以上の tag が必要です。
 
 boolean metadata は =true=, =false=, =t=, =nil= を受け付けます。
+
+Qiita CLI が管理する =updated_at=, =id=, =organization_url_name= は生成される
+Markdown に出力されます。=public/<slug>.md= に既存値がある場合は、再 export 時に
+保持されます。
 
 新規記事は次の雛形で作成されます。
 
@@ -272,7 +279,7 @@ export error になります。
 
 * Limitations
 
-v1 package は Zenn CLI、Qiita CLI、preview、publish、Git push、リモート投稿状態との
+export command は Zenn CLI、Qiita CLI、preview、publish、Git push、リモート投稿状態との
 同期を実行しません。
 
 asset copy は行いません。=[[file:...]]= link はそのまま Markdown link または

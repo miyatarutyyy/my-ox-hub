@@ -34,6 +34,12 @@
   '("avif" "gif" "jpeg" "jpg" "png" "svg" "webp")
   "File extensions treated as images in Markdown links.")
 
+(defconst ox-hub--qiita-cli-managed-fields
+  '(("updated_at" . :qiita-updated-at)
+    ("id" . :qiita-id)
+    ("organization_url_name" . :qiita-organization-url-name))
+  "Qiita CLI managed front matter fields preserved across exports.")
+
 (defun ox-hub--new-article-template ()
   "Return the default Org metadata template for a new article."
   (concat "#+OXHUB_TITLE:\n"
@@ -200,18 +206,31 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
             topics
             (ox-hub--yaml-boolean (ox-hub--published-p metadata)))))
 
-(defun ox-hub--render-qiita-front-matter (metadata)
-  "Render Qiita front matter from normalized METADATA."
+(defun ox-hub--render-qiita-front-matter (metadata &optional cli-metadata)
+  "Render Qiita front matter from normalized METADATA.
+CLI-METADATA is a plist of Qiita CLI managed field values."
   (let ((tags (mapconcat (lambda (tag)
                            (format "  - %s" (ox-hub--yaml-quoted tag)))
                          (plist-get metadata :tags)
                          "\n")))
-    (format "---\ntitle: %s\ntags:\n%s\nprivate: %s\nslide: %s\nignorePublish: %s\n---\n"
+    (format "---\ntitle: %s\ntags:\n%s\nprivate: %s\nupdated_at: %s\nid: %s\norganization_url_name: %s\nslide: %s\nignorePublish: %s\n---\n"
             (ox-hub--yaml-quoted (plist-get metadata :title))
             tags
             (ox-hub--yaml-boolean (plist-get metadata :qiita-private))
+            (ox-hub--yaml-quoted
+             (ox-hub--qiita-cli-metadata-value cli-metadata :qiita-updated-at))
+            (ox-hub--yaml-quoted
+             (ox-hub--qiita-cli-metadata-value cli-metadata :qiita-id))
+            (ox-hub--yaml-quoted
+             (ox-hub--qiita-cli-metadata-value cli-metadata
+                                                 :qiita-organization-url-name))
             (ox-hub--yaml-boolean (plist-get metadata :qiita-slide))
             (ox-hub--yaml-boolean (not (ox-hub--published-p metadata))))))
+
+(defun ox-hub--qiita-cli-metadata-value (metadata key)
+  "Return Qiita CLI METADATA value for KEY, defaulting to an empty string."
+  (let ((value (plist-get metadata key)))
+    (if (stringp value) value "")))
 
 (defun ox-hub--render-body (ast &optional target)
   "Render Org AST body as Markdown for TARGET."
@@ -399,10 +418,25 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
                           (ox-hub--render-contents node target)
                         nil)))
     (if (and (equal type "file") (ox-hub--image-path-p path))
-        (concat (format "![%s](%s)" (or description "") url)
+        (concat (format "![%s](%s)"
+                        (or description "")
+                        (ox-hub--render-image-url url target))
                 (ox-hub--render-post-blank node))
       (concat (format "[%s](%s)" (or description url) url)
               (ox-hub--render-post-blank node)))))
+
+(defun ox-hub--render-image-url (url target)
+  "Render image URL for TARGET."
+  (pcase target
+    ('zenn (ox-hub--zenn-image-url url))
+    (_ url)))
+
+(defun ox-hub--zenn-image-url (url)
+  "Return URL as a Zenn project-root image path."
+  (let ((normalized (replace-regexp-in-string "\\`\\./+" "" (or url ""))))
+    (if (string-prefix-p "/" normalized)
+        normalized
+      (concat "/" normalized))))
 
 (defun ox-hub--image-path-p (path)
   "Return non-nil when PATH has a known image file extension."
@@ -588,18 +622,100 @@ The first plist value is stored as :directive."
     ('qiita (expand-file-name (concat "public/" slug ".md") root))
     (_ (error "Unsupported export target: %s" target))))
 
-(defun ox-hub--render-front-matter (metadata target)
-  "Render front matter from METADATA for TARGET."
+(defun ox-hub--read-qiita-cli-metadata (file)
+  "Read Qiita CLI managed metadata from Markdown FILE."
+  (if (file-exists-p file)
+      (let ((front-matter (ox-hub--read-markdown-front-matter file))
+            metadata)
+        (dolist (field ox-hub--qiita-cli-managed-fields)
+          (let ((value (and front-matter
+                            (ox-hub--front-matter-string-value
+                             front-matter
+                             (car field)))))
+            (when value
+              (setq metadata (plist-put metadata (cdr field) value)))))
+        metadata)
+    nil))
+
+(defun ox-hub--read-markdown-front-matter (file)
+  "Return Markdown front matter from FILE, or nil."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (when (looking-at-p "---[ \t]*\n")
+      (forward-line 1)
+      (let ((start (point)))
+        (when (re-search-forward "^---[ \t]*$" nil t)
+          (buffer-substring-no-properties start (line-beginning-position)))))))
+
+(defun ox-hub--front-matter-string-value (front-matter field)
+  "Return string value for FIELD from FRONT-MATTER."
+  (with-temp-buffer
+    (insert front-matter)
+    (goto-char (point-min))
+    (when (re-search-forward
+           (format "^%s:[ \t]*\\(.*\\)$" (regexp-quote field))
+           nil
+           t)
+      (ox-hub--parse-yaml-string-scalar (match-string 1)))))
+
+(defun ox-hub--parse-yaml-string-scalar (value)
+  "Parse simple YAML string scalar VALUE."
+  (let ((trimmed (string-trim (or value ""))))
+    (cond
+     ((or (string-empty-p trimmed)
+          (member (downcase trimmed) '("null" "~")))
+      "")
+     ((and (>= (length trimmed) 2)
+           (eq (aref trimmed 0) ?\")
+           (eq (aref trimmed (1- (length trimmed))) ?\"))
+      (ox-hub--unescape-yaml-double-quoted
+       (substring trimmed 1 (1- (length trimmed)))))
+     ((and (>= (length trimmed) 2)
+           (eq (aref trimmed 0) ?')
+           (eq (aref trimmed (1- (length trimmed))) ?'))
+      (replace-regexp-in-string "''" "'" (substring trimmed 1 (1- (length trimmed))) t t))
+     (t trimmed))))
+
+(defun ox-hub--unescape-yaml-double-quoted (value)
+  "Unescape the YAML double-quoted string VALUE subset ox-hub emits."
+  (let ((result "")
+        (index 0)
+        char)
+    (while (< index (length value))
+      (setq char (aref value index))
+      (if (and (eq char ?\\)
+               (< (1+ index) (length value)))
+          (let ((escaped (aref value (1+ index))))
+            (setq result
+                  (concat result
+                          (pcase escaped
+                            (?n "\n")
+                            (?\" "\"")
+                            (?\\ "\\")
+                            (_ (char-to-string escaped)))))
+            (setq index (+ index 2)))
+        (setq result (concat result (char-to-string char)))
+        (setq index (1+ index))))
+    result))
+
+(defun ox-hub--render-front-matter (metadata target &optional output-file)
+  "Render front matter from METADATA for TARGET.
+OUTPUT-FILE is used when target-specific metadata should be preserved."
   (pcase target
     ('zenn (ox-hub--render-zenn-front-matter metadata))
-    ('qiita (ox-hub--render-qiita-front-matter metadata))
+    ('qiita (ox-hub--render-qiita-front-matter
+             metadata
+             (and output-file
+                  (ox-hub--read-qiita-cli-metadata output-file))))
     (_ (error "Unsupported export target: %s" target))))
 
-(defun ox-hub--render-document (ast target)
-  "Render full Markdown document from Org AST for TARGET."
+(defun ox-hub--render-document (ast target &optional output-file)
+  "Render full Markdown document from Org AST for TARGET.
+OUTPUT-FILE is used when target-specific metadata should be preserved."
   (let* ((metadata (ox-hub--validate-metadata
                     (ox-hub--extract-metadata ast)))
-         (front-matter (ox-hub--render-front-matter metadata target))
+         (front-matter (ox-hub--render-front-matter metadata target output-file))
          (body (ox-hub--render-body ast target)))
     (concat front-matter "\n" body)))
 

@@ -251,7 +251,7 @@
                      :qiita-private "true"
                      :qiita-slide "false"))))
     (should (equal (ox-hub--render-qiita-front-matter metadata)
-                   "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\n  - \"org-mode\"\nprivate: true\nslide: false\nignorePublish: true\n---\n"))))
+                   "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\n  - \"org-mode\"\nprivate: true\nupdated_at: \"\"\nid: \"\"\norganization_url_name: \"\"\nslide: false\nignorePublish: true\n---\n"))))
 
 (ert-deftest ox-hub-render-qiita-front-matter-renders-published ()
   (let ((metadata (ox-hub--validate-metadata
@@ -263,7 +263,60 @@
                      :qiita-private "false"
                      :qiita-slide "true"))))
     (should (equal (ox-hub--render-qiita-front-matter metadata)
-                   "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\nprivate: false\nslide: true\nignorePublish: false\n---\n"))))
+                   "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\nprivate: false\nupdated_at: \"\"\nid: \"\"\norganization_url_name: \"\"\nslide: true\nignorePublish: false\n---\n"))))
+
+(ert-deftest ox-hub-render-qiita-front-matter-preserves-cli-metadata ()
+  (let ((metadata (ox-hub--validate-metadata
+                   '(:title "Example Title"
+                     :tags "emacs"
+                     :status "draft"
+                     :zenn-emoji "memo"
+                     :zenn-type "tech"
+                     :qiita-private "false"
+                     :qiita-slide "false"))))
+    (should (equal (ox-hub--render-qiita-front-matter
+                    metadata
+                    '(:qiita-updated-at "2026-05-22T00:00:00+09:00"
+                      :qiita-id "abc123"
+                      :qiita-organization-url-name "org-name"))
+                   "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\nprivate: false\nupdated_at: \"2026-05-22T00:00:00+09:00\"\nid: \"abc123\"\norganization_url_name: \"org-name\"\nslide: false\nignorePublish: true\n---\n"))))
+
+(ert-deftest ox-hub-read-qiita-cli-metadata-reads-existing-front-matter ()
+  (let ((file (make-temp-file "ox-hub-qiita-" nil ".md")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "---\n"
+                    "title: \"Old\"\n"
+                    "updated_at: \"2026-05-22T00:00:00+09:00\"\n"
+                    "id: \"abc123\"\n"
+                    "organization_url_name: \"org-name\"\n"
+                    "---\n"
+                    "\n"
+                    "Body\n"))
+          (should (equal (ox-hub--read-qiita-cli-metadata file)
+                         '(:qiita-updated-at "2026-05-22T00:00:00+09:00"
+                           :qiita-id "abc123"
+                           :qiita-organization-url-name "org-name"))))
+      (when (file-exists-p file)
+        (delete-file file)))))
+
+(ert-deftest ox-hub-read-qiita-cli-metadata-normalizes-null-values ()
+  (let ((file (make-temp-file "ox-hub-qiita-" nil ".md")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "---\n"
+                    "updated_at: null\n"
+                    "id:\n"
+                    "organization_url_name: ~\n"
+                    "---\n"))
+          (should (equal (ox-hub--read-qiita-cli-metadata file)
+                         '(:qiita-updated-at ""
+                           :qiita-id ""
+                           :qiita-organization-url-name ""))))
+      (when (file-exists-p file)
+        (delete-file file)))))
 
 (ert-deftest ox-hub-render-body-skips-keywords ()
   (let ((ast (ox-hub-test--parse-string
@@ -282,6 +335,24 @@
               "Text *bold* /italic/ =code= ~verbatim~ [[https://example.com][Example]] [[file:notes.org][Notes]] [[file:image.png]]\n")))
     (should (equal (ox-hub--render-body ast)
                    "Text **bold** *italic* `code` `verbatim` [Example](https://example.com) [Notes](notes.org) ![](image.png)\n"))))
+
+(ert-deftest ox-hub-render-body-renders-zenn-image-links-from-root ()
+  (let ((ast (ox-hub-test--parse-string
+              "Image [[file:images/sample.png]] and [[file:/images/root.png]]\n")))
+    (should (equal (ox-hub--render-body ast 'zenn)
+                   "Image ![](/images/sample.png) and ![](/images/root.png)\n"))))
+
+(ert-deftest ox-hub-render-body-keeps-qiita-image-links-relative ()
+  (let ((ast (ox-hub-test--parse-string
+              "Image [[file:images/sample.png]]\n")))
+    (should (equal (ox-hub--render-body ast 'qiita)
+                   "Image ![](images/sample.png)\n"))))
+
+(ert-deftest ox-hub-render-body-keeps-plain-file-links-relative-for-zenn ()
+  (let ((ast (ox-hub-test--parse-string
+              "Notes [[file:notes.org][Notes]]\n")))
+    (should (equal (ox-hub--render-body ast 'zenn)
+                   "Notes [Notes](notes.org)\n"))))
 
 (ert-deftest ox-hub-render-body-renders-strike-through ()
   (let ((ast (ox-hub-test--parse-string

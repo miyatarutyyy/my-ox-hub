@@ -92,7 +92,7 @@ v1 の必須項目:
 
 boolean 値は =true=, =false=, =t=, =nil= を受け付け、内部では Lisp boolean に正規化する。不正値は error にする。
 
-Qiita CLI が管理する =id=, =updated_at=, =organization_url_name= は v1 では Org metadata として扱わず、出力もしない。将来必要になった段階で、Org metadata として管理するか、既存 =dist/= から引き継ぐかを再設計する。
+Qiita CLI が管理する =id=, =updated_at=, =organization_url_name= は Org metadata として扱わない。Markdown には必ず出力し、既存 =public/<slug>.md= から値を引き継ぐ。
 
 * Front Matter Rendering
 
@@ -117,6 +117,9 @@ tags:
   - emacs
   - org-mode
 private: false
+updated_at: ""
+id: ""
+organization_url_name: ""
 slide: false
 ignorePublish: false
 ---
@@ -207,11 +210,10 @@ emacs --batch -l ert -l ox-hub.el -l test/ox-hub-test.el -f ert-run-tests-batch-
 
 * Assumptions
 
-- =dist/qiita/public<slug>.md= という表記は =dist/qiita/public/<slug>.md= の意図として扱う。
-- =dist/= 配下の Markdown は再生成可能な成果物であり、手編集しない。
-- GitHub Actions で Qiita CLI が front matter を更新しても、v1 ではその変更を repository へ自動で戻さない。
-- Qiita の =id= や =updated_at= が必要になった場合は、v1 後に別途同期設計を追加する。
-- Zenn/Qiita の CLI 実行、preview、publish 補助は今回の MVP には含めない。
+- =articles/= と =public/= 配下の Markdown は再生成可能な成果物であり、手編集しない。
+- ox-hub 自体は Qiita CLI の実行や commit/push を行わない。GitHub Actions 側で Qiita CLI が front matter を更新した場合、その変更は action 側で repository へ戻す。
+- Qiita の =id=, =updated_at=, =organization_url_name= は既存 Markdown から保持する。
+- Qiita の CLI 実行、preview、publish 補助は今回の MVP には含めない。Zenn CLI は repository root で実行する。
 
 * References
 

@@ -1,0 +1,34 @@
+#+TITLE: ox-hub TODO
+
+* TODO Zenn topic constraints
+
+Zenn topics cannot contain symbols or spaces.  For example, =org-mode= may
+need to be rendered as =orgmode= for Zenn.
+
+Consider whether ox-hub should support target-specific tags, such as separate
+Zenn topics and Qiita tags, before changing metadata validation.
+
+* TODO Image asset copy
+
+Zenn image links should point to project-root paths such as
+=/images/sample.png=.  ox-hub now renders Zenn image links from the project
+root, but it does not copy image files.
+
+Decide whether export should copy images from the article repository into
+=images/= and the corresponding Qiita asset location.
+
+* TODO Japanese punctuation around Org emphasis
+
+Org does not parse emphasis when the closing marker is followed immediately by
+Japanese punctuation, such as =*bold*、=.  With spaces, such as =*bold* 、=,
+Org parses the markup correctly.
+
+Investigate whether ox-hub should document this as an Org authoring rule or
+add a preprocessing step before Org parsing.
+
+* TODO Qiita image path behavior
+
+Confirm the exact image path convention expected by Qiita CLI before changing
+Qiita image rendering.
+
+For now, Qiita image links remain relative, such as =images/sample.png=.

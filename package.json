@@ -1,0 +1,25 @@
+{
+  "name": "ox-hub",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "preview:zenn": "zenn preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github-private:miyatarutyyy/my-ox-hub.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "zenn-cli": "^0.4.8"
+  }
+}

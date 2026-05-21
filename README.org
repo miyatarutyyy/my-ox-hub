@@ -130,6 +130,9 @@ tags:
   - "emacs"
   - "org-mode"
 private: false
+updated_at: ""
+id: ""
+organization_url_name: ""
 slide: false
 ignorePublish: true
 ---
@@ -172,6 +175,10 @@ The status is rendered as:
 one tag is required when exporting.
 
 Boolean metadata accepts =true=, =false=, =t=, and =nil=.
+
+Qiita CLI-managed fields =updated_at=, =id=, and =organization_url_name= are
+written to the generated Markdown. Existing values in =public/<slug>.md= are
+preserved across exports.
 
 New articles start with:
 
@@ -272,7 +279,7 @@ parameters fail the export.
 
 * Limitations
 
-The v1 package intentionally does not run Zenn CLI, Qiita CLI, preview,
+The export commands intentionally do not run Zenn CLI, Qiita CLI, preview,
 publish, Git push, or remote posting-state synchronization.
 
 Assets are not copied. =[[file:...]]= links are converted to Markdown links or
