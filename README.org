@@ -12,11 +12,12 @@ exporting Markdown for both Zenn and Qiita.
 
 The MVP treats =org/<slug>.org= as the source of truth and generates:
 
-- =dist/zenn/articles/<slug>.md=
-- =dist/qiita/public/<slug>.md=
+- =articles/<slug>.md=
+- =public/<slug>.md=
 
-Publishing, Git push, Zenn CLI, Qiita CLI, and synchronization with remote
-posting state are outside the v1 scope.
+Publishing, Git push, Qiita CLI, and synchronization with remote posting state
+are outside the v1 scope.  Zenn CLI can read the generated =articles/= and
+=images/= directories from the repository root.
 
 * Installation
 
@@ -74,8 +75,8 @@ M-x ox-hub-export-current-buffer
 The command writes:
 
 #+begin_src text
-dist/zenn/articles/my-first-note.md
-dist/qiita/public/my-first-note.md
+articles/my-first-note.md
+public/my-first-note.md
 #+end_src
 
 * End-to-end Example

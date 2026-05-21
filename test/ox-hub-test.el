@@ -477,15 +477,15 @@
 
 (ert-deftest ox-hub-target-output-file-resolves-target-paths ()
   (should (equal (ox-hub--target-output-file "/repo" "valid_slug-12" 'zenn)
-                 "/repo/dist/zenn/articles/valid_slug-12.md"))
+                 "/repo/articles/valid_slug-12.md"))
   (should (equal (ox-hub--target-output-file "/repo" "valid_slug-12" 'qiita)
-                 "/repo/dist/qiita/public/valid_slug-12.md"))
+                 "/repo/public/valid_slug-12.md"))
   (should-error (ox-hub--target-output-file "/repo" "valid_slug-12" 'other)))
 
 (ert-deftest ox-hub-export-current-buffer-to-zenn-writes-markdown ()
   (ox-hub-test--with-temp-git-root (root source-file)
     (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
-          (output-file (expand-file-name "dist/zenn/articles/valid_slug-12.md" root)))
+          (output-file (expand-file-name "articles/valid_slug-12.md" root)))
       (make-directory (file-name-directory article-file) t)
       (with-temp-file article-file
         (insert (ox-hub-test--valid-article-content)))
@@ -497,20 +497,44 @@
 (ert-deftest ox-hub-export-current-buffer-to-qiita-writes-markdown ()
   (ox-hub-test--with-temp-git-root (root source-file)
     (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
-          (output-file (expand-file-name "dist/qiita/public/valid_slug-12.md" root)))
+          (output-file (expand-file-name "public/valid_slug-12.md" root)))
       (make-directory (file-name-directory article-file) t)
       (with-temp-file article-file
         (insert (ox-hub-test--valid-article-content)))
       (with-current-buffer (find-file-noselect article-file)
         (should (equal (ox-hub-export-current-buffer-to-qiita) output-file)))
       (should (equal (ox-hub-test--read-file-string output-file)
-                     "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\n  - \"org-mode\"\nprivate: false\nslide: false\nignorePublish: true\n---\n\nHello **world**\n")))))
+                     "---\ntitle: \"Example Title\"\ntags:\n  - \"emacs\"\n  - \"org-mode\"\nprivate: false\nupdated_at: \"\"\nid: \"\"\norganization_url_name: \"\"\nslide: false\nignorePublish: true\n---\n\nHello **world**\n")))))
+
+(ert-deftest ox-hub-export-current-buffer-to-qiita-preserves-cli-metadata ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
+          (output-file (expand-file-name "public/valid_slug-12.md" root)))
+      (make-directory (file-name-directory article-file) t)
+      (make-directory (file-name-directory output-file) t)
+      (with-temp-file article-file
+        (insert (ox-hub-test--valid-article-content)))
+      (with-temp-file output-file
+        (insert "---\n"
+                "title: \"Old Title\"\n"
+                "updated_at: \"2026-05-22T00:00:00+09:00\"\n"
+                "id: \"abc123\"\n"
+                "organization_url_name: \"org-name\"\n"
+                "---\n"
+                "\n"
+                "Old body\n"))
+      (with-current-buffer (find-file-noselect article-file)
+        (should (equal (ox-hub-export-current-buffer-to-qiita) output-file)))
+      (should (string-match-p
+               (regexp-quote
+                "updated_at: \"2026-05-22T00:00:00+09:00\"\nid: \"abc123\"\norganization_url_name: \"org-name\"")
+               (ox-hub-test--read-file-string output-file))))))
 
 (ert-deftest ox-hub-export-current-buffer-writes-both-targets ()
   (ox-hub-test--with-temp-git-root (root source-file)
     (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
-          (zenn-file (expand-file-name "dist/zenn/articles/valid_slug-12.md" root))
-          (qiita-file (expand-file-name "dist/qiita/public/valid_slug-12.md" root)))
+          (zenn-file (expand-file-name "articles/valid_slug-12.md" root))
+          (qiita-file (expand-file-name "public/valid_slug-12.md" root)))
       (make-directory (file-name-directory article-file) t)
       (with-temp-file article-file
         (insert (ox-hub-test--valid-article-content)))
@@ -523,7 +547,7 @@
 (ert-deftest ox-hub-export-current-buffer-overwrites-existing-output ()
   (ox-hub-test--with-temp-git-root (root source-file)
     (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
-          (output-file (expand-file-name "dist/zenn/articles/valid_slug-12.md" root)))
+          (output-file (expand-file-name "articles/valid_slug-12.md" root)))
       (make-directory (file-name-directory article-file) t)
       (make-directory (file-name-directory output-file) t)
       (with-temp-file article-file
@@ -538,8 +562,8 @@
 (ert-deftest ox-hub-export-current-buffer-renders-target-specific-directives ()
   (ox-hub-test--with-temp-git-root (root source-file)
     (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
-          (zenn-file (expand-file-name "dist/zenn/articles/valid_slug-12.md" root))
-          (qiita-file (expand-file-name "dist/qiita/public/valid_slug-12.md" root)))
+          (zenn-file (expand-file-name "articles/valid_slug-12.md" root))
+          (qiita-file (expand-file-name "public/valid_slug-12.md" root)))
       (make-directory (file-name-directory article-file) t)
       (with-temp-file article-file
         (insert (ox-hub-test--valid-article-content))

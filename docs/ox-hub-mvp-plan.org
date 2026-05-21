@@ -22,7 +22,7 @@ v1 では以下の interactive command を提供する。
 
 - =ox-hub-export-current-buffer=
   - 現在の Org buffer から Zenn/Qiita 両方の Markdown を生成する。
-  - 出力先は =dist/zenn/articles/<slug>.md= と =dist/qiita/public/<slug>.md= とする。
+  - 出力先は =articles/<slug>.md= と =public/<slug>.md= とする。
   - =<slug>= は現在の Org ファイル basename から取得する。
   - 生成済み Markdown は常に上書きする。
 
@@ -51,19 +51,16 @@ v1 では以下の interactive command を提供する。
 .
 |-- org/
 |   `-- example-slug.org
-|-- dist/
-|   |-- zenn/
-|   |   `-- articles/
-|   |       `-- example-slug.md
-|   `-- qiita/
-|       `-- public/
-|           `-- example-slug.md
+|-- articles/
+|   `-- example-slug.md
+|-- images/
 |-- public/
+|   `-- example-slug.md
 |-- src/
 `-- .gitignore
 #+end_src
 
-=org/= はユーザーが編集する正本を置く。=dist/= は生成物であり、手編集しない前提とする。
+=org/= はユーザーが編集する正本を置く。=articles/= と =public/= は生成物であり、手編集しない前提とする。=images/= は Zenn CLI が repository root から読む画像実体を置く。
 
 * Metadata Specification
 

@@ -584,8 +584,8 @@ The first plist value is stored as :directive."
 (defun ox-hub--target-output-file (root slug target)
   "Return output path under ROOT for article SLUG and TARGET."
   (pcase target
-    ('zenn (expand-file-name (concat "dist/zenn/articles/" slug ".md") root))
-    ('qiita (expand-file-name (concat "dist/qiita/public/" slug ".md") root))
+    ('zenn (expand-file-name (concat "articles/" slug ".md") root))
+    ('qiita (expand-file-name (concat "public/" slug ".md") root))
     (_ (error "Unsupported export target: %s" target))))
 
 (defun ox-hub--render-front-matter (metadata target)
@@ -614,7 +614,7 @@ The first plist value is stored as :directive."
          (root (ox-hub--git-root))
          (ast (ox-hub--parse-buffer))
          (output-file (ox-hub--target-output-file root slug target))
-         (content (ox-hub--render-document ast target)))
+         (content (ox-hub--render-document ast target output-file)))
     (ox-hub--write-file output-file content)
     (message "Exported %s: %s" target output-file)
     output-file))

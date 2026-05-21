@@ -10,7 +10,7 @@ MVP 実装前の決定事項をここに固定する。
 - テストは =test/ox-hub-test.el= に Emacs 標準の ERT で書く。
 - 最小 =README.md= を追加し、コマンド一覧、metadata、test command だけを記載する。
 - Emacs package metadata、Makefile、Zenn/Qiita CLI 実行、Git push、publish、自動同期は v1 では扱わない。
-- 生成物は =dist/zenn/articles/= と =dist/qiita/public/= に出力し、Git 管理する。
+- 生成物は =articles/= と =public/= に出力し、Git 管理する。
 
 * Public Commands
 
@@ -24,7 +24,7 @@ v1 では以下の interactive command を実装する。
 
 - =ox-hub-export-current-buffer=
   - 現在の Org buffer から Zenn/Qiita 両方の Markdown を生成する。
-  - 出力先は =dist/zenn/articles/<slug>.md= と =dist/qiita/public/<slug>.md= とする。
+  - 出力先は =articles/<slug>.md= と =public/<slug>.md= とする。
   - =<slug>= は現在の Org ファイル basename から取得する。
   - 生成済み Markdown は常に上書きする。
 
@@ -124,6 +124,9 @@ tags:
   - emacs
   - org-mode
 private: false
+updated_at: ""
+id: ""
+organization_url_name: ""
 slide: false
 ignorePublish: true
 ---
@@ -236,8 +239,8 @@ emacs --batch -l ert -l ox-hub.el -l test/ox-hub-test.el -f ert-run-tests-batch-
 - Git root は =/home/trt-ryzen7/Dev/ox-hub= とする。
 - =docs/ox-hub-mvp-plan.org= は既存の計画書として残す。
 - Zenn/Qiita CLI 本体は v1 テスト対象外とする。
-- =dist/zenn= と =dist/qiita= を各連携・CLI の root として扱う運用は repository 設定側で吸収する。
-- =dist/= 配下の Markdown は再生成可能だが、GitHub 連携用の入力として Git 管理する。
+- Zenn CLI と Qiita CLI は repository root を root として扱う。
+- =articles/= と =public/= 配下の Markdown は再生成可能だが、連携用の入力として Git 管理する。
 
 * References
 

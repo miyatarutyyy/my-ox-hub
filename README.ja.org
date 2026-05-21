@@ -12,10 +12,11 @@ Markdown を生成する Emacs package です。
 
 MVP では =org/<slug>.org= を正本として扱い、次のファイルを生成します。
 
-- =dist/zenn/articles/<slug>.md=
-- =dist/qiita/public/<slug>.md=
+- =articles/<slug>.md=
+- =public/<slug>.md=
 
-公開、Git push、Zenn CLI、Qiita CLI、リモート投稿状態との同期は v1 の範囲外です。
+公開、Git push、Qiita CLI、リモート投稿状態との同期は v1 の範囲外です。Zenn CLI は
+repository root の =articles/= と =images/= を読み取れます。
 
 * Installation
 
@@ -73,8 +74,8 @@ M-x ox-hub-export-current-buffer
 この command は次のファイルを書き出します。
 
 #+begin_src text
-dist/zenn/articles/my-first-note.md
-dist/qiita/public/my-first-note.md
+articles/my-first-note.md
+public/my-first-note.md
 #+end_src
 
 * End-to-end Example
