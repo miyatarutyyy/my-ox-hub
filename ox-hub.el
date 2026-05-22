@@ -2,8 +2,10 @@
 
 ;; Copyright (C) 2026 ox-hub maintainers
 
-;; Author: ox-hub maintainers
+;; Author: miyatarutyyy <study.miyata026@gmail.com>
 ;; Keywords: org, markdown
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "27.1") (org "9.5"))
 
 ;;; Commentary:
 
