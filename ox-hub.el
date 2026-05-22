@@ -47,6 +47,20 @@
     ("organization_url_name" . :qiita-organization-url-name))
   "Qiita CLI managed front matter fields preserved across exports.")
 
+;;; Article and Buffer Context
+
+;; Helpers for creating article skeletons and resolving the current project,
+;; source buffer, and article identity.
+
+(defconst ox-hub--slug-min-length 12
+  "Minimum length of an ox-hub article slug.")
+
+(defconst ox-hub--slug-max-length 50
+  "Maximum length of an ox-hub article slug.")
+
+(defconst ox-hub--slug-regexp "\\`[a-z0-9_-]+\\'"
+  "Regular expression for a valid ox-hub article slug.")
+
 (defun ox-hub--new-article-template ()
   "Return the default Org metadata template for a new article."
   (concat "#+OXHUB_TITLE:\n"
@@ -61,16 +75,16 @@
 (defun ox-hub--valid-slug-p (slug)
   "Return non-nil when SLUG is valid for an ox-hub article."
   (and (stringp slug)
-       (<= 12 (length slug))
-       (<= (length slug) 50)
+       (<= ox-hub--slug-min-length (length slug))
+       (<= (length slug) ox-hub--slug-max-length)
        (let ((case-fold-search nil))
-         (string-match-p "\\`[a-z0-9_-]+\\'" slug))))
+         (string-match-p ox-hub--slug-regexp slug))))
 
-(defun ox-hub--git-root (&optional file)
-  "Return the Git root for FILE or the current buffer context.
-When the current buffer is not visiting a file, use `default-directory'.
-Signal `user-error' when there is no Git root."
-  (let ((path (or file buffer-file-name default-directory)))
+(defun ox-hub--git-root (&optional start-path)
+  "Return the Git root for START-PATH or the current buffer context.
+When START-PATH is nil and the current buffer is not visiting a file, use
+`default-directory'.  Signal `user-error' when there is no Git root."
+  (let ((path (or start-path buffer-file-name default-directory)))
     (unless path
       (user-error "Current buffer has no directory context"))
     (let ((root (locate-dominating-file path ".git")))
