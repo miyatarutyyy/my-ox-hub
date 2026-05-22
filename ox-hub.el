@@ -701,10 +701,13 @@ The first plist value is stored as :directive."
 (defun ox-hub--current-article-slug ()
   "Return the current Org article slug from `buffer-file-name'."
   (unless buffer-file-name
-    (user-error "Current buffer is not visiting a file"))
+    (user-error
+     "This buffer is not visiting a file. Please save it as an Org article file first"))
   (let ((slug (file-name-base buffer-file-name)))
     (unless (ox-hub--valid-slug-p slug)
-      (user-error "Invalid article slug: %s" slug))
+      (user-error
+       "Invalid article slug \"%s\". Please rename the Org file using lowercase letters, numbers, and hyphens, e.g. \"my-article-title.org\""
+       slug))
     slug))
 
 (defun ox-hub--target-output-file (root slug target)
