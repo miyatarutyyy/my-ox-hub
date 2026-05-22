@@ -277,7 +277,7 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
              (ox-hub--qiita-cli-metadata-value cli-metadata :qiita-id))
             (ox-hub--yaml-quoted
              (ox-hub--qiita-cli-metadata-value cli-metadata
-                                                 :qiita-organization-url-name))
+                                               :qiita-organization-url-name))
             (ox-hub--yaml-boolean (plist-get metadata :qiita-slide))
             (ox-hub--yaml-boolean (not (ox-hub--published-p metadata))))))
 
