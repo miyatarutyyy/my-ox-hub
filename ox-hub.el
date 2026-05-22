@@ -9,7 +9,9 @@
 
 ;;; Commentary:
 
-;; ox-hub exports one Org-mode source article to Markdown for Zenn and Qiita.
+;; ox-hub exports a single Org-mode source article into Markdown files for publishing platforms such as Zenn and Qiita
+;;
+;; It reads OXHUB_* metadata from Org keywords and converts the articles body into platform-specific Markdown
 
 ;;; Code:
 
@@ -17,6 +19,11 @@
 (require 'org-element)
 (require 'seq)
 (require 'subr-x)
+
+;;; Constants
+
+;; Shared tables that define supported metadata, paths, and target-specific
+;; fields.
 
 (defconst ox-hub--metadata-key-map
   '(("OXHUB_TITLE" . :title)
@@ -27,6 +34,16 @@
     ("OXHUB_QIITA_PRIVATE" . :qiita-private)
     ("OXHUB_QIITA_SLIDE" . :qiita-slide))
   "Mapping from Org keyword names to internal metadata keys.")
+
+;; Currently, ox-hub treats all metadata keys as required because the MVP
+;; assumes exporting a single Org source to both Zenn and Qiita. If future
+;; versions support exporting to only one target, split this list into
+;; target-specific required metadata, e.g. common keys plus Zenn-only and
+;; Qiita-only keys.
+;;
+;; (defconst ox-hub--required-metadata
+;;   '(:title :tags :status :zenn-emoji :zenn-type :qiita-private :qiita-slide)
+;;  "Metadata keys required for export.")
 
 (defconst ox-hub--required-metadata
   '(:title :tags :status :zenn-emoji :zenn-type :qiita-private :qiita-slide)
@@ -101,6 +118,11 @@ When START-PATH is nil and the current buffer is not visiting a file, use
      (goto-char (point-min))
      (org-element-parse-buffer))))
 
+;;; Metadata Parsing and Validation
+
+;; Convert #+OXHUB_* keywords into normalized metadata used by all export
+;; targets.
+
 (defun ox-hub--metadata-key (org-key)
   "Return the internal metadata key for ORG-KEY, or nil."
   (cdr (assoc (upcase org-key) ox-hub--metadata-key-map)))
@@ -152,6 +174,10 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
       (user-error "OXHUB_TAGS must contain at least one tag"))
     tags))
 
+;;; Scalar Formatting
+
+;; These helpers assume values have already been parsed and validated by the metadata layer.  They only handle presentation-level escaping.
+
 (defun ox-hub--yaml-escape-string (value)
   "Escape VALUE for use in a YAML double-quoted string."
   (mapconcat (lambda (char)
@@ -166,7 +192,7 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
              ""))
 
 (defun ox-hub--yaml-boolean (value)
-  "Return VALUE as a YAML boolean string."
+  "Return VALUE as a YAML boolean string. Non-nil values are rendered as \"true\" and nil as \"false\"."
   (if value "true" "false"))
 
 (defun ox-hub--yaml-quoted (value)
@@ -184,6 +210,10 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
                  (_ (char-to-string char))))
              value
              ""))
+
+;;; Metadata Normalization
+
+;; Build the canonical metadata plist consumed by front matter renderers.
 
 (defun ox-hub--published-p (metadata)
   "Return non-nil when METADATA should be published."
@@ -213,6 +243,10 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
           :zenn-type zenn-type
           :qiita-private qiita-private
           :qiita-slide qiita-slide)))
+
+;;; Front Matter Rendering
+
+;; Render normalized metadata into Zenn and Qiita front matter.
 
 (defun ox-hub--render-zenn-front-matter (metadata)
   "Render Zenn front matter from normalized METADATA."
@@ -252,6 +286,10 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
   (let ((value (plist-get metadata key)))
     (if (stringp value) value "")))
 
+;;; Markdown Rendering Dispatcher
+
+;; Dispatch Org AST nodes to the Markdown renderer for each supported element.
+
 (defun ox-hub--render-body (ast &optional target)
   "Render Org AST body as Markdown for TARGET."
   (let ((body (string-trim-right (ox-hub--render-node ast target))))
@@ -268,6 +306,8 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
     (pcase (org-element-type node)
       ('org-data (ox-hub--render-contents node target))
       ('section (ox-hub--render-contents node target))
+      ;; Keywords are handled as metadata or target-specific attributes elsewhere.
+      ;; The body renderer intentionally omits them for now.
       ('keyword "")
       ('headline (ox-hub--render-headline node target))
       ('paragraph (concat (string-trim-right
@@ -320,6 +360,11 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
             "\n\n"
             contents)))
 
+;;; Code Blocks
+
+;; Render Org source and example blocks with fences that safely contain nested
+;; backticks.
+
 (defun ox-hub--markdown-code-fence (content)
   "Return a Markdown code fence longer than any backtick run in CONTENT."
   (let ((max-run 0)
@@ -348,6 +393,11 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
   (ox-hub--render-fenced-code-block
    ""
    (or (org-element-property :value node) "")))
+
+;;; Lists
+
+;; Preserve ordered and unordered list markers while normalizing indentation for
+;; nested list content.
 
 (defun ox-hub--render-plain-list (node target)
   "Render plain-list NODE as a Markdown list for TARGET."
@@ -428,6 +478,11 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
         (setq previous-type type)))
     (or rendered "")))
 
+;;; Links and Images
+
+;; Render regular links directly and rewrite image file links when a target has
+;; stricter path requirements.
+
 (defun ox-hub--render-link (node target)
   "Render link NODE as Markdown for TARGET."
   (let* ((type (org-element-property :type node))
@@ -463,6 +518,10 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
   (let ((extension (and path (file-name-extension path))))
     (and extension
          (member (downcase extension) ox-hub--image-file-extensions))))
+
+;;; Block Elements
+
+;; Render Markdown blocks that are not handled by the main dispatcher directly.
 
 (defun ox-hub--render-quote-block (node target)
   "Render quote-block NODE as Markdown for TARGET."
@@ -507,6 +566,10 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
   "Format CELLS as one Markdown table row."
   (concat "| " (mapconcat #'identity cells " | ") " |"))
 
+;;; Footnotes
+
+;; Convert Org footnote references and definitions to Markdown footnote syntax.
+
 (defun ox-hub--render-footnote-reference (node)
   "Render footnote-reference NODE as Markdown."
   (concat (format "[^%s]" (org-element-property :label node))
@@ -519,6 +582,10 @@ CLI-METADATA is a plist of Qiita CLI managed field values."
     (format "[^%s]: %s\n\n"
             label
             (replace-regexp-in-string "\n" "\n    " content nil t))))
+
+;;; oxhub Special Directives
+
+;; Target-specific extensions encoded as Org special blocks named "oxhub".
 
 (defun ox-hub--parse-directive-parameters (parameters)
   "Parse oxhub directive PARAMETERS into a plist.
@@ -626,6 +693,11 @@ The first plist value is stored as :directive."
                      "\n")
           "\n\n"))
 
+;;; Export Paths and Existing Output Metadata
+
+;; Resolve output locations and preserve fields owned by external publishing
+;; tools when regenerating Markdown files.
+
 (defun ox-hub--current-article-slug ()
   "Return the current Org article slug from `buffer-file-name'."
   (unless buffer-file-name
@@ -719,6 +791,10 @@ The first plist value is stored as :directive."
         (setq index (1+ index))))
     result))
 
+;;; Document Assembly and Writing
+
+;; Combine metadata and rendered body content, then write target Markdown files.
+
 (defun ox-hub--render-front-matter (metadata target &optional output-file)
   "Render front matter from METADATA for TARGET.
 OUTPUT-FILE is used when target-specific metadata should be preserved."
@@ -754,6 +830,10 @@ OUTPUT-FILE is used when target-specific metadata should be preserved."
     (ox-hub--write-file output-file content)
     (message "Exported %s: %s" target output-file)
     output-file))
+
+;;; Public Commands
+
+;; Interactive entry points used by package users.
 
 ;;;###autoload
 (defun ox-hub-new-article (slug)
