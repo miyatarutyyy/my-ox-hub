@@ -144,13 +144,12 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
     normalized))
 
 (defun ox-hub--parse-tags (value)
-  "Parse comma-separated tag VALUE into a non-empty list of strings."
-  (let ((tags (seq-filter (lambda (tag)
-                            (not (string-empty-p tag)))
+  "Parse VALUE as a comma-separated list of tags. Signal an error when VALUE does not contain at least one non-empty tag."
+  (let ((tags (seq-remove #'string-empty-p
                           (mapcar #'string-trim
-                                  (split-string (or value "") ",")))))
+                                  (split-string value ",")))))
     (unless tags
-      (error "At least one OXHUB_TAGS value is required"))
+      (user-error "OXHUB_TAGS must contain at least one tag"))
     tags))
 
 (defun ox-hub--yaml-escape-string (value)
@@ -160,6 +159,8 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
                  (?\\ "\\\\")
                  (?\" "\\\"")
                  (?\n "\\n")
+                 (?\t "\\t")
+                 (?\r "\\r")
                  (_ (char-to-string char))))
              value
              ""))
@@ -190,8 +191,6 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
 
 (defun ox-hub--validate-metadata (metadata)
   "Validate and normalize ox-hub METADATA."
-  (dolist (key ox-hub--required-metadata)
-    (ox-hub--require-metadata metadata key))
   (let ((title (ox-hub--require-metadata metadata :title))
         (tags (ox-hub--parse-tags (ox-hub--require-metadata metadata :tags)))
         (status (ox-hub--validate-enum
