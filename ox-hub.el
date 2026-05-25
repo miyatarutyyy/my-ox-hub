@@ -412,12 +412,13 @@ SEARCH-POSITIONS tracks the next search position for repeated raw strings."
         (special-mode)))
     (display-buffer buffer)))
 
-(defun ox-hub--warn-compatibility-diagnostics ()
-  "Warn about ox-hub compatibility diagnostics and return them."
+(defun ox-hub--ensure-no-compatibility-diagnostics ()
+  "Signal `user-error' when ox-hub compatibility diagnostics exist."
   (let ((diagnostics (ox-hub--compatibility-diagnostics)))
     (when diagnostics
-      (message "ox-hub lint: %d warning(s). Run M-x ox-hub-lint-current-buffer for details."
-               (length diagnostics)))
+      (ox-hub--display-compatibility-diagnostics diagnostics)
+      (user-error "ox-hub lint failed: %d warning(s). Export canceled"
+                  (length diagnostics)))
     diagnostics))
 
 ;;; Front Matter Rendering
@@ -1047,7 +1048,7 @@ OUTPUT-FILE is used when target-specific metadata should be preserved."
 (defun ox-hub-export-current-buffer ()
   "Export the current Org buffer to Zenn and Qiita Markdown."
   (interactive)
-  (ox-hub--warn-compatibility-diagnostics)
+  (ox-hub--ensure-no-compatibility-diagnostics)
   (list (ox-hub--export-current-buffer-to-target 'zenn)
         (ox-hub--export-current-buffer-to-target 'qiita)))
 
@@ -1055,14 +1056,14 @@ OUTPUT-FILE is used when target-specific metadata should be preserved."
 (defun ox-hub-export-current-buffer-to-zenn ()
   "Export the current Org buffer to Zenn Markdown."
   (interactive)
-  (ox-hub--warn-compatibility-diagnostics)
+  (ox-hub--ensure-no-compatibility-diagnostics)
   (ox-hub--export-current-buffer-to-target 'zenn))
 
 ;;;###autoload
 (defun ox-hub-export-current-buffer-to-qiita ()
   "Export the current Org buffer to Qiita Markdown."
   (interactive)
-  (ox-hub--warn-compatibility-diagnostics)
+  (ox-hub--ensure-no-compatibility-diagnostics)
   (ox-hub--export-current-buffer-to-target 'qiita))
 
 (provide 'ox-hub)

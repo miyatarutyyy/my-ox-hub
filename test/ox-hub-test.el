@@ -660,7 +660,7 @@
       (should (file-exists-p zenn-file))
       (should (file-exists-p qiita-file)))))
 
-(ert-deftest ox-hub-export-current-buffer-continues-with-lint-warnings ()
+(ert-deftest ox-hub-export-current-buffer-rejects-lint-warnings ()
   (ox-hub-test--with-temp-git-root (root source-file)
     (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
           (zenn-file (expand-file-name "articles/valid_slug-12.md" root))
@@ -671,10 +671,9 @@
         (insert "\n、*raw-bold*\n"))
       (with-current-buffer (find-file-noselect article-file)
         (should (ox-hub--compatibility-diagnostics))
-        (should (equal (ox-hub-export-current-buffer)
-                       (list zenn-file qiita-file))))
-      (should (file-exists-p zenn-file))
-      (should (file-exists-p qiita-file)))))
+        (should-error (ox-hub-export-current-buffer) :type 'user-error))
+      (should-not (file-exists-p zenn-file))
+      (should-not (file-exists-p qiita-file)))))
 
 (ert-deftest ox-hub-export-current-buffer-overwrites-existing-output ()
   (ox-hub-test--with-temp-git-root (root source-file)
