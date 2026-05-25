@@ -17,6 +17,7 @@
 
 (require 'org)
 (require 'org-element)
+(require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
 
@@ -57,6 +58,18 @@
   '((zenn . "articles")
     (qiita . "public"))
   "Git-root relative output directories for each export target.")
+
+(defconst ox-hub--compatibility-warning-message
+  "日本語句読点が Org 強調 marker に隣接しているため、Org AST 上で inline markup として認識されない可能性があります。強調記法の周囲を ASCII 句読点または空白で区切ってください。"
+  "Warning message for ox-hub compatibility diagnostics.")
+
+(defconst ox-hub--compatibility-emphasis-markers
+  '(?* ?/ ?= ?~ ?+)
+  "Org emphasis markers checked by ox-hub compatibility diagnostics.")
+
+(defconst ox-hub--compatibility-japanese-punctuation
+  '(?、 ?。)
+  "Japanese punctuation characters checked next to Org emphasis markers.")
 
 (defconst ox-hub--qiita-cli-managed-fields
   '(("updated_at" . :qiita-updated-at)
@@ -243,6 +256,169 @@ Accepted values are true, false, t, and nil.  Signal an error otherwise."
           :zenn-type zenn-type
           :qiita-private qiita-private
           :qiita-slide qiita-slide)))
+
+;;; Compatibility Diagnostics
+
+;; These diagnostics are intentionally scoped to ox-hub input compatibility.
+;; They inspect Org AST raw text and warn about markup that Org likely left as
+;; plain text.  The renderer continues to trust the Org AST.
+
+(defun ox-hub--compatibility-diagnostics (&optional ast)
+  "Return ox-hub compatibility diagnostics for AST or the current Org buffer."
+  (let ((ast (or ast
+                 (save-excursion
+                   (org-with-wide-buffer
+                    (goto-char (point-min))
+                    (org-element-parse-buffer)))))
+        (search-positions (make-hash-table :test 'eq))
+        diagnostics)
+    (cl-labels
+        ((walk
+          (node)
+          (cond
+           ((stringp node)
+            (let ((parent (get-text-property 0 :parent node)))
+              (when parent
+                (ox-hub--collect-compatibility-diagnostics
+                 node parent search-positions
+                 (lambda (diagnostic)
+                   (push diagnostic diagnostics))))))
+           ((and (consp node)
+                 (not (memq (org-element-type node)
+                            '(src-block example-block code verbatim))))
+            (when (eq (org-element-type node) 'headline)
+              (dolist (child (org-element-property :title node))
+                (walk child)))
+            (dolist (child (org-element-contents node))
+              (walk child))))))
+      (walk ast))
+    (nreverse diagnostics)))
+
+(defun ox-hub--collect-compatibility-diagnostics
+    (text parent search-positions push-diagnostic)
+  "Collect diagnostics for raw TEXT under PARENT.
+SEARCH-POSITIONS tracks the next buffer search position per parent node.
+PUSH-DIAGNOSTIC is called with each diagnostic plist."
+  (let* ((plain-text (substring-no-properties text))
+         (text-begin (ox-hub--locate-raw-text text parent search-positions)))
+    (when text-begin
+      (dolist (range (ox-hub--raw-emphasis-candidate-ranges plain-text))
+        (let ((begin (+ text-begin (car range)))
+              (end (+ text-begin (cdr range))))
+          (funcall push-diagnostic
+                   (ox-hub--make-compatibility-diagnostic begin end)))))))
+
+(defun ox-hub--raw-emphasis-candidate-ranges (text)
+  "Return raw Org emphasis candidate ranges in TEXT.
+Each range is a cons of zero-based begin and end offsets."
+  (let ((pos 0)
+        (length (length text))
+        ranges)
+    (while (< pos length)
+      (let ((char (aref text pos)))
+        (if (ox-hub--compatibility-emphasis-marker-p char)
+            (let ((close (ox-hub--find-raw-emphasis-close text pos char)))
+              (if close
+                  (progn
+                    (when (ox-hub--raw-emphasis-next-to-japanese-punctuation-p
+                           text pos close)
+                      (push (cons pos (1+ close)) ranges))
+                    (setq pos (1+ close)))
+                (setq pos (1+ pos))))
+          (setq pos (1+ pos)))))
+    (nreverse ranges)))
+
+(defun ox-hub--find-raw-emphasis-close (text open marker)
+  "Return close position for MARKER in TEXT after OPEN, or nil."
+  (let ((pos (1+ open))
+        (length (length text))
+        close
+        invalid)
+    (while (and (< pos length) (not close) (not invalid))
+      (let ((char (aref text pos)))
+        (cond
+         ((eq char ?\n)
+          (setq invalid t))
+         ((eq char marker)
+          (setq close pos))
+         ((ox-hub--compatibility-emphasis-marker-p char)
+          (setq invalid t))))
+      (setq pos (1+ pos)))
+    (and close
+         (> close (1+ open))
+         close)))
+
+(defun ox-hub--raw-emphasis-next-to-japanese-punctuation-p (text open close)
+  "Return non-nil when TEXT candidate OPEN..CLOSE touches Japanese punctuation."
+  (or (and (> open 0)
+           (ox-hub--compatibility-japanese-punctuation-p
+            (aref text (1- open))))
+      (and (< (1+ close) (length text))
+           (ox-hub--compatibility-japanese-punctuation-p
+            (aref text (1+ close))))))
+
+(defun ox-hub--compatibility-emphasis-marker-p (char)
+  "Return non-nil when CHAR is an Org emphasis marker checked by ox-hub."
+  (memq char ox-hub--compatibility-emphasis-markers))
+
+(defun ox-hub--compatibility-japanese-punctuation-p (char)
+  "Return non-nil when CHAR is Japanese punctuation checked by ox-hub."
+  (memq char ox-hub--compatibility-japanese-punctuation))
+
+(defun ox-hub--locate-raw-text (text parent search-positions)
+  "Return the buffer position of TEXT under PARENT.
+SEARCH-POSITIONS tracks the next search position for repeated raw strings."
+  (let* ((plain-text (substring-no-properties text))
+         (begin (or (gethash parent search-positions)
+                    (org-element-property :begin parent)))
+         (end (org-element-property :end parent)))
+    (when (and begin end (not (string-empty-p plain-text)))
+      (save-excursion
+        (goto-char begin)
+        (when (search-forward plain-text end t)
+          (puthash parent (point) search-positions)
+          (match-beginning 0))))))
+
+(defun ox-hub--make-compatibility-diagnostic (begin end)
+  "Return an OXHUB001 compatibility diagnostic from BEGIN to END."
+  (save-excursion
+    (goto-char begin)
+    (list :severity 'warning
+          :code "OXHUB001"
+          :begin begin
+          :end end
+          :line (line-number-at-pos begin)
+          :column (current-column)
+          :message ox-hub--compatibility-warning-message)))
+
+(defun ox-hub--format-compatibility-diagnostic (diagnostic)
+  "Format DIAGNOSTIC for display."
+  (format "%s:%s: %s %s: %s"
+          (plist-get diagnostic :line)
+          (1+ (plist-get diagnostic :column))
+          (upcase (symbol-name (plist-get diagnostic :severity)))
+          (plist-get diagnostic :code)
+          (plist-get diagnostic :message)))
+
+(defun ox-hub--display-compatibility-diagnostics (diagnostics)
+  "Display DIAGNOSTICS in the ox-hub lint buffer."
+  (let ((buffer (get-buffer-create "*ox-hub lint*")))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "ox-hub lint: %d warning(s)\n\n" (length diagnostics)))
+        (dolist (diagnostic diagnostics)
+          (insert (ox-hub--format-compatibility-diagnostic diagnostic) "\n"))
+        (special-mode)))
+    (display-buffer buffer)))
+
+(defun ox-hub--warn-compatibility-diagnostics ()
+  "Warn about ox-hub compatibility diagnostics and return them."
+  (let ((diagnostics (ox-hub--compatibility-diagnostics)))
+    (when diagnostics
+      (message "ox-hub lint: %d warning(s). Run M-x ox-hub-lint-current-buffer for details."
+               (length diagnostics)))
+    diagnostics))
 
 ;;; Front Matter Rendering
 
@@ -839,6 +1015,18 @@ OUTPUT-FILE is used when target-specific metadata should be preserved."
 ;; Interactive entry points used by package users.
 
 ;;;###autoload
+(defun ox-hub-lint-current-buffer ()
+  "Diagnose ox-hub compatibility warnings in the current Org buffer."
+  (interactive)
+  (let ((diagnostics (ox-hub--compatibility-diagnostics)))
+    (if diagnostics
+        (progn
+          (ox-hub--display-compatibility-diagnostics diagnostics)
+          (message "ox-hub lint: %d warning(s)" (length diagnostics)))
+      (message "ox-hub lint: no warnings"))
+    diagnostics))
+
+;;;###autoload
 (defun ox-hub-new-article (slug)
   "Create a new Org article for SLUG under the Git root."
   (interactive "sArticle slug: ")
@@ -859,6 +1047,7 @@ OUTPUT-FILE is used when target-specific metadata should be preserved."
 (defun ox-hub-export-current-buffer ()
   "Export the current Org buffer to Zenn and Qiita Markdown."
   (interactive)
+  (ox-hub--warn-compatibility-diagnostics)
   (list (ox-hub--export-current-buffer-to-target 'zenn)
         (ox-hub--export-current-buffer-to-target 'qiita)))
 
@@ -866,12 +1055,14 @@ OUTPUT-FILE is used when target-specific metadata should be preserved."
 (defun ox-hub-export-current-buffer-to-zenn ()
   "Export the current Org buffer to Zenn Markdown."
   (interactive)
+  (ox-hub--warn-compatibility-diagnostics)
   (ox-hub--export-current-buffer-to-target 'zenn))
 
 ;;;###autoload
 (defun ox-hub-export-current-buffer-to-qiita ()
   "Export the current Org buffer to Qiita Markdown."
   (interactive)
+  (ox-hub--warn-compatibility-diagnostics)
   (ox-hub--export-current-buffer-to-target 'qiita))
 
 (provide 'ox-hub)

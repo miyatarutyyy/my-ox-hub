@@ -15,6 +15,15 @@
     (goto-char (point-min))
     (org-element-parse-buffer)))
 
+(defun ox-hub-test--diagnostics (content)
+  "Return ox-hub compatibility diagnostics for CONTENT."
+  (with-temp-buffer
+    (org-mode)
+    (insert content)
+    (goto-char (point-min))
+    (let ((ast (org-element-parse-buffer)))
+      (ox-hub--compatibility-diagnostics ast))))
+
 (defun ox-hub-test--valid-metadata ()
   "Return valid raw metadata for tests."
   '(:title "Example Title"
@@ -216,6 +225,36 @@
   (let ((metadata (copy-sequence (ox-hub-test--valid-metadata))))
     (setq metadata (plist-put metadata :tags " , , "))
     (should-error (ox-hub--validate-metadata metadata))))
+
+(ert-deftest ox-hub-compatibility-diagnostics-warn-for-japanese-punctuation ()
+  (let ((diagnostics
+         (ox-hub-test--diagnostics
+          "*bold*、/italic/、=code=、~verbatim~、+strike+\n")))
+    (should (= (length diagnostics) 5))
+    (dolist (diagnostic diagnostics)
+      (should (eq (plist-get diagnostic :severity) 'warning))
+      (should (equal (plist-get diagnostic :code) "OXHUB001"))
+      (should (plist-get diagnostic :begin))
+      (should (plist-get diagnostic :end))
+      (should (plist-get diagnostic :line))
+      (should (plist-get diagnostic :column))
+      (should (equal (plist-get diagnostic :message)
+                     ox-hub--compatibility-warning-message)))))
+
+(ert-deftest ox-hub-compatibility-diagnostics-ignore-ascii-punctuation ()
+  (should-not
+   (ox-hub-test--diagnostics
+    "*bold*, /italic/, =code=, ~verbatim~, +strike+\n")))
+
+(ert-deftest ox-hub-compatibility-diagnostics-ignore-parsed-inline-elements ()
+  (should-not
+   (ox-hub-test--diagnostics
+    "Text *bold* /italic/ =code= ~verbatim~ +strike+ text\n")))
+
+(ert-deftest ox-hub-compatibility-diagnostics-ignore-code-like-blocks ()
+  (should-not
+   (ox-hub-test--diagnostics
+    "#+begin_src text\n、*bold*\n#+end_src\n\n#+begin_example\n、/italic/\n#+end_example\n")))
 
 (ert-deftest ox-hub-render-zenn-front-matter-renders-draft ()
   (let ((metadata (ox-hub--validate-metadata
@@ -616,6 +655,22 @@
       (with-temp-file article-file
         (insert (ox-hub-test--valid-article-content)))
       (with-current-buffer (find-file-noselect article-file)
+        (should (equal (ox-hub-export-current-buffer)
+                       (list zenn-file qiita-file))))
+      (should (file-exists-p zenn-file))
+      (should (file-exists-p qiita-file)))))
+
+(ert-deftest ox-hub-export-current-buffer-continues-with-lint-warnings ()
+  (ox-hub-test--with-temp-git-root (root source-file)
+    (let ((article-file (expand-file-name "org/valid_slug-12.org" root))
+          (zenn-file (expand-file-name "articles/valid_slug-12.md" root))
+          (qiita-file (expand-file-name "public/valid_slug-12.md" root)))
+      (make-directory (file-name-directory article-file) t)
+      (with-temp-file article-file
+        (insert (ox-hub-test--valid-article-content))
+        (insert "\n、*raw-bold*\n"))
+      (with-current-buffer (find-file-noselect article-file)
+        (should (ox-hub--compatibility-diagnostics))
         (should (equal (ox-hub-export-current-buffer)
                        (list zenn-file qiita-file))))
       (should (file-exists-p zenn-file))
